@@ -185,7 +185,7 @@ function fichaPrueba(codigo) {
   const obs = (r) => (r.observaciones ? ` · <i>${esc(r.observaciones)}</i>` : '');
   const meta = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<div class="meta"><span><b>${m}</b> sin aplicar</span><button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Aplicar ahora</button></div>`;
     const om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante');
-    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.terminada_antes ? ' · terminada antes del final' : ''}${obs(r)}${chipCal(codigo, m)}</span><button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
+    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.terminada_antes ? ' · terminada antes del final' : ''}${obs(r)}${chipCal(codigo, m)}</span><button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
   const pend = regs.some((r, i) => r && S[i].total == null) ? '<p class="guia" style="margin:6px 0 0;font-size:.85em">Las sumas aparecen cuando la puntuación acordada está completa y ningún ítem queda sin oportunidad de respuesta.</p>' : '';
   return `<div class="prueba"><h3>${esc(PC.corto)}<span>${esc(PC.titulo)}</span></h3><table class="dims"><thead><tr><th></th><th>Pretest</th><th>Postest</th><th title="Postest menos pretest">Cambio</th></tr></thead><tbody>${filas}</tbody></table>${pend}${meta}</div>`;
 }
@@ -283,23 +283,39 @@ $('#btnStart').addEventListener('click', async () => {
 
 /* ---------- pantalla del niño ---------- */
 let K = null;
+// Orden de presentación de las situaciones: en el pretest, el del cuadernillo (1 a 6). En el postest, al azar y distinto
+// para cada estudiante, por bloques (1-4 entre sí y 5-6 entre sí, con la pausa entre ambos), para que no repita de memoria el
+// pretest; el primer bloque nunca queda en el orden del pretest. El orden interno de cada situación (hojas y preguntas) no
+// cambia. Las respuestas se guardan por código de ítem, así que las columnas no cambian; el orden queda en el registro (orden).
+function barajar(lista) { const a = lista.slice(); for (let i = a.length - 1; i > 0; i--) { const j = Math.floor(Math.random() * (i + 1)); [a[i], a[j]] = [a[j], a[i]]; } return a; }
+const ORDEN_FIJO = PC.bloques.map((b) => b.situaciones);
+function ordenSituaciones(momento) {
+  if (momento !== 'Postest') return ORDEN_FIJO.flat();
+  let out; do { out = ORDEN_FIJO.map(barajar); } while (out[0].join() === ORDEN_FIJO[0].join());
+  return out.flat();
+}
 // Secuencia de pantallas, como las hojas del cuadernillo: instrucciones y práctica (no se guarda), y por cada situación sus
 // etapas (hojas). Cada pantalla lleva el número de etapa (g); solo se puede volver atrás dentro de la misma etapa.
-function secuencia() {
+function secuencia(orden) {
   const seq = [{ tipo: 'inicio', g: 0 }]; let g = 0;
   PC.practica.items.forEach((it, i) => seq.push({ tipo: 'item', it, prac: true, sit: { titulo: PC.practica.titulo, texto: PC.practica.texto }, g: 0, pracN: i + 1 }));
-  for (const sit of PC.situaciones) sit.etapas.forEach((et, e) => {
-    g++;
-    if (e === 0 && sit.pausa_antes) seq.push({ tipo: 'pausa', g });
-    seq.push({ tipo: 'etapa', sit, et, e, g });
-    for (const c of et.items) seq.push({ tipo: 'item', it: ITEM[c], sit, et, g });
+  const sitDe = Object.fromEntries(PC.situaciones.map((s) => [s.id, s]));
+  for (const b of PC.bloques) orden.filter((id) => b.situaciones.includes(id)).forEach((id, i) => {
+    const sit = sitDe[id];
+    sit.etapas.forEach((et, e) => {
+      g++;
+      if (e === 0 && i === 0 && b.pausa_antes) seq.push({ tipo: 'pausa', g });
+      seq.push({ tipo: 'etapa', sit, et, e, g });
+      for (const c of et.items) seq.push({ tipo: 'item', it: ITEM[c], sit, et, g });
+    });
   });
   seq.push({ tipo: 'fin', g: g + 1 });
+  let pos = 0; for (const x of seq) if (x.tipo === 'item' && !x.prac && !x.it.auxiliar) x.pos = ++pos; // posición en el orden presentado
   return seq;
 }
 function startKid(cfg, avance = null) {
-  const seq = secuencia();
-  K = { ...cfg, seq, i: avance ? Math.min(avance.i, seq.length - 2) : 0, resp: avance ? avance.resp : {}, estado: avance ? avance.estado || {} : {}, escriba: avance ? avance.escriba || {} : {}, pracResp: {}, escribaDef: localStorage.getItem('escriba') || 'nino', t0: avance ? Date.now() - (avance.transcurrido || 0) : Date.now(), terminada_antes: avance ? !!avance.terminada_antes : false };
+  const orden = (avance && avance.orden) || ordenSituaciones(cfg.momento), seq = secuencia(orden);
+  K = { ...cfg, orden, seq, i: avance ? Math.min(avance.i, seq.length - 2) : 0, resp: avance ? avance.resp : {}, estado: avance ? avance.estado || {} : {}, escriba: avance ? avance.escriba || {} : {}, pracResp: {}, escribaDef: localStorage.getItem('escriba') || 'nino', t0: avance ? Date.now() - (avance.transcurrido || 0) : Date.now(), terminada_antes: avance ? !!avance.terminada_antes : false };
   $('#kTag').innerHTML = `<b>${esc(PC.corto)}</b> · ${esc(cfg.codigo)} ${esc(nombreDe(cfg.codigo))} · ${esc(cfg.momento)}`;
   $('#kAyudaPanel').innerHTML = guionHtml(); $('#kAyudaPanel').classList.add('oculto');
   $('#kid').classList.remove('oculto'); $('#app').classList.add('oculto');
@@ -356,7 +372,7 @@ function renderKid() {
     $('#kNext').textContent = 'Empezar la práctica';
   } else if (scr.tipo === 'pausa') {
     $('#kCount').textContent = 'Pausa';
-    body.innerHTML = `<div class="k-inter"><div class="caja"><p class="eti">Pausa breve</p><h3>Vamos a descansar un momento</h3><p class="centro">Después seguimos con las dos últimas historias: el juego en equipos y la maqueta.</p><div class="aplicador"><b>Aplicador:</b> pausa breve antes de las situaciones 5 y 6. En ellas, la primera elección se cierra antes de mostrar la información nueva. Las respuestas anteriores ya quedaron cerradas.</div></div></div>`;
+    body.innerHTML = `<div class="k-inter"><div class="caja"><p class="eti">Pausa breve</p><h3>Vamos a descansar un momento</h3><p class="centro">Después seguimos con las dos últimas historias: ${K.orden.slice(-2).map((id) => PC.situaciones.find((x) => x.id === id).titulo.toLowerCase()).join(' y ')}.</p><div class="aplicador"><b>Aplicador:</b> pausa breve antes de las situaciones 5 y 6. En ellas, la primera elección se cierra antes de mostrar la información nueva. Las respuestas anteriores ya quedaron cerradas.</div></div></div>`;
     $('#kNext').textContent = 'Continuar';
   } else if (scr.tipo === 'etapa') {
     const s = scr.sit, et = scr.et; $('#kCount').textContent = `Situación ${s.num}`;
@@ -371,7 +387,7 @@ function renderKid() {
     const it = scr.it, dep = dependencia(scr);
     if (dep && !dep.ok && !K.estado[it.codigo]) { K.estado[it.codigo] = 'faltante'; guardarAvance(); }
     const e = scr.prac ? null : K.estado[it.codigo];
-    $('#kCount').textContent = scr.prac ? `Práctica ${scr.pracN} de ${PC.practica.items.length}` : it.num ? `Ítem ${it.num} de ${PUNTUABLES.length}` : 'Elección inicial';
+    $('#kCount').textContent = scr.prac ? `Práctica ${scr.pracN} de ${PC.practica.items.length}` : it.num ? `Pregunta ${scr.pos} de ${PUNTUABLES.length}` : 'Elección inicial';
     const tag = e ? `<span class="om ${e === 'faltante' ? 'falt' : ''}">${e === 'omitido' ? 'Sin respuesta: omitió' : 'Sin oportunidad: dato faltante'}</span>` : '';
     body.innerHTML = situacionHtml(scr) + `<div class="k-preg"><p class="num"><span>${scr.prac ? 'Práctica (no se guarda)' : it.num ? `Ítem ${it.num}` : esc(it.etiqueta)}</span>${tag}</p>${dep ? dep.html : ''}${it.partes.map((p) => parteHtml(scr, p)).join('')}</div>`;
     $('#kSinResp').classList.toggle('oculto', !!scr.prac); $('#kSinResp').textContent = e ? 'Quitar la marca y responder' : 'Sin respuesta';
@@ -416,7 +432,7 @@ $('#kFin').addEventListener('click', async () => {
   pend.forEach((it) => (K.estado[it.codigo] = 'faltante')); K.terminada_antes = true;
   K.i = K.seq.length - 1; guardarAvance(); renderKid();
 });
-function guardarAvance() { if (!K) return; localStorage.setItem('avance', JSON.stringify({ codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, i: K.i, resp: K.resp, estado: K.estado, escriba: K.escriba, terminada_antes: K.terminada_antes, transcurrido: Date.now() - K.t0, fecha: new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) })); }
+function guardarAvance() { if (!K) return; localStorage.setItem('avance', JSON.stringify({ codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, orden: K.orden, i: K.i, resp: K.resp, estado: K.estado, escriba: K.escriba, terminada_antes: K.terminada_antes, transcurrido: Date.now() - K.t0, fecha: new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) })); }
 $('#kExit').addEventListener('click', async () => {
   const empezada = K && (Object.keys(K.resp).length > 0 || Object.keys(K.estado).length > 0) && K.seq[K.i].tipo !== 'fin';
   if (empezada && !(await dialogo({ titulo: 'Salir de la aplicación', texto: 'El avance queda guardado en este dispositivo y puede continuar después desde "Aplicar al estudiante". Si la aplicación no va a continuar, use "Terminar aquí" para guardarla con los ítems que faltan como dato faltante.', ok: 'Salir', cancelar: 'Seguir aquí' }))) return;
@@ -448,7 +464,7 @@ function renderFin() {
     <div class="fila" style="margin-top:12px"><button class="btn grande" id="kSave">Guardar</button><button class="btn sec grande" id="kDiscard">Descartar</button></div><div id="kMsg" style="margin-top:10px"></div></div></div>`;
   $('#kSave').addEventListener('click', async () => {
     $('#kSave').disabled = true;
-    const cuerpo = { row: { codigo, momento, aplicador: K.aplicador, duracion_seg: dur, respuestas: resp, estado, escriba: K.escriba, terminada_antes: K.terminada_antes, observaciones: $('#kObs').value.trim() } };
+    const cuerpo = { row: { codigo, momento, aplicador: K.aplicador, duracion_seg: dur, respuestas: resp, estado, escriba: K.escriba, ...(K.momento === 'Postest' ? { orden: K.orden } : {}), terminada_antes: K.terminada_antes, observaciones: $('#kObs').value.trim() } };
     try { await api('registro', { method: 'PUT', body: cuerpo }); localStorage.removeItem('avance'); toast('Guardado'); cerrarKid(true); }
     catch (e) {
       if (e.status && e.status < 500) { $('#kMsg').innerHTML = `<div class="aviso mal">No se pudo guardar: ${esc(e.message)}.</div>`; $('#kSave').disabled = false; return; }

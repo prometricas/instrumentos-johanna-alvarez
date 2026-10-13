@@ -107,6 +107,8 @@ function aplicacion(INS, nivel, ajuste, esp = {}) {
   if (esp.terminada) { let corta = false; for (const s of PC.situaciones) { if (s.id === esp.terminada) corta = true; if (corta) for (const et of s.etapas) for (const c of et.items) { estado[c] = 'faltante'; for (const p of ITEM[c].partes) delete resp[c + p.id]; delete q[c]; } } terminada_antes = true; }
   return { resp, q, estado, escriba, terminada_antes };
 }
+const barajar = (l) => l.slice().sort(() => Math.random() - 0.5);
+function ordenPostest(INS) { const fijo = INS.PC.bloques.map((b) => b.situaciones); let out; do { out = fijo.map(barajar); } while (out[0].join() === fijo[0].join()); return out.flat(); }
 // Puntuación de un calificador a partir de la calidad verdadera: coincide casi siempre; a veces se desvía un punto
 function puntuar(q, INS, exactitud) { const out = {}; for (const it of INS.PC.items) if (it.puntuacion.tipo === 'rubrica' && q[it.codigo] != null) { const v = q[it.codigo]; out[it.codigo] = Math.random() < exactitud ? v : Math.max(0, Math.min(2, v + (Math.random() < 0.5 ? -1 : 1))); } return out; }
 
@@ -148,7 +150,8 @@ async function semilla({ base = '', clave, INS, log = console.log, reiniciar = f
       if (!hayReg(codigo, m)) {
         const ajuste = m === 'Postest' ? (grupo === 'Experimental' ? 0.18 : (Math.random() - 0.5) * 0.08) : 0;
         const a = aplicacion(INS, nivel, ajuste, ESPECIAL[`${codigo}-${m}`]); q = a.q;
-        await api('registro', { method: 'PUT', body: { row: { codigo, momento: m, aplicador: 'Johanna Álvarez', duracion_seg: 1500 + Math.floor(Math.random() * 900), respuestas: a.resp, estado: a.estado, escriba: a.escriba, terminada_antes: a.terminada_antes, observaciones: a.terminada_antes ? 'Se interrumpió por una actividad del colegio; no se pudo retomar.' : '' } } });
+        const orden = m === 'Postest' ? ordenPostest(INS) : undefined; // en el postest la app baraja las situaciones por bloques y guarda el orden
+        await api('registro', { method: 'PUT', body: { row: { codigo, momento: m, aplicador: 'Johanna Álvarez', duracion_seg: 1500 + Math.floor(Math.random() * 900), respuestas: a.resp, estado: a.estado, escriba: a.escriba, orden, terminada_antes: a.terminada_antes, observaciones: a.terminada_antes ? 'Se interrumpió por una actividad del colegio; no se pudo retomar.' : '' } } });
         n++; log(`${codigo} ${m}${a.terminada_antes ? ' (interrumpida)' : ''}${Object.keys(a.estado).length ? ' · ' + Object.entries(a.estado).map(([k, v]) => k + ' ' + v).join(', ') : ''}`);
       } else if (roles) { // calidad de referencia para calificar una aplicación ya guardada: nivel del estudiante
         q = {}; for (const it of INS.PC.items) if (it.puntuacion.tipo === 'rubrica') q[it.codigo] = calidad(nivel, 0);

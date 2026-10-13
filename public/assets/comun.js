@@ -90,6 +90,7 @@ function acuerdo(pares) {
 }
 const fmtK = (k) => (k == null ? '—' : (Math.round(k * 100) / 100).toFixed(2).replace('.', ','));
 const fmtPct = (p) => (p == null ? '—' : Math.round(p) + ' %');
+const ordenNums = (r) => (r.orden || []).map((id) => { const s = PC.situaciones.find((x) => x.id === id); return s ? s.num : id; }).join(', '); // "3, 1, 4, 2, 6, 5"
 const calDe = (datos, codigo, m) => { const o = {}; for (const r of datos.calif) if (r.codigo === codigo && r.momento === m) o[r.rol] = r; return o; };
 const regDe = (datos, codigo, m) => datos.pc.find((r) => r.codigo === codigo && r.momento === m);
 
@@ -100,6 +101,7 @@ const FIJAS = [['grupo', 'Grupo'], ['codigo', 'Codigo'], ['nombre', 'Nombre'], [
 function columnasRespuestas(op = {}) {
   const cols = [], c = (bloque, id, texto, valor, tipo = bloque) => cols.push({ bloque, id, texto, valor, tipo });
   c('meta', 'Protocolo', 'Código de protocolo con el que se calificó la aplicación', (r) => r.protocolo || '');
+  c('meta', 'OrdenSituaciones', 'Orden en que se presentaron las situaciones (en el postest se barajan por bloques); vacío = orden del cuadernillo', (r) => (r.orden ? ordenNums(r).replace(/, /g, ',') : ''));
   if (op.meta) {
     c('meta', 'FechaHora', 'Fecha y hora de la aplicación', (r) => r.fecha_hora || r.fecha || '');
     c('meta', 'Aplicador', 'Quién aplicó la prueba', (r) => r.aplicador || '');

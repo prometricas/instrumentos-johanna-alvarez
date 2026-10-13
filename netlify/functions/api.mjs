@@ -30,21 +30,23 @@ async function protocoloDe(secreto, codigo, momento) {
   let out = ""; for (let i = 0; i < 4; i++) out += AL[parseInt(h.slice(i * 4, i * 4 + 4), 16) % AL.length];
   return "P-" + out;
 }
-// Intentos fallidos de clave por dirección IP: espera de 1,5 s tras cada fallo y bloqueo de 5 minutos tras 5 fallos en 10 minutos.
+// Intentos fallidos de clave por dirección IP: espera de 1,5 s tras cada fallo y bloqueo de 15 segundos tras 5 fallos en 10 minutos.
+const BLOQUEO_MS = 15000;
 const ipDe = (req) => req.headers.get("x-nf-client-connection-ip") || "local";
 async function bloqueo(req) {
   const r = await store("intentos").get(ipDe(req), { type: "json" });
-  if (r && r.hasta > Date.now()) return json({ error: `Demasiados intentos fallidos. Espere ${Math.ceil((r.hasta - Date.now()) / 60000)} minuto(s).` }, 429);
+  const resta = r ? r.hasta - Date.now() : 0;
+  if (resta > 0 && resta <= BLOQUEO_MS) return json({ error: `Demasiados intentos fallidos. Espere ${Math.ceil(resta / 1000)} segundos.` }, 429); // un bloqueo más largo (de una versión anterior) ya no cuenta
   return null;
 }
 async function fallo(req) {
   const st = store("intentos"), ip = ipDe(req), r = (await st.get(ip, { type: "json" })) || { n: 0, t: 0, hasta: 0 };
   if (Date.now() - r.t > 10 * 60000) r.n = 0; // los intentos se cuentan dentro de 10 minutos
   r.n += 1; r.t = Date.now();
-  if (r.n >= 5) { r.hasta = Date.now() + 5 * 60000; r.n = 0; }
+  if (r.n >= 5) { r.hasta = Date.now() + BLOQUEO_MS; r.n = 0; }
   await st.setJSON(ip, r);
   await new Promise((res) => setTimeout(res, 1500));
-  return json({ error: r.hasta > Date.now() ? "Demasiados intentos fallidos. Espere 5 minutos." : "Clave incorrecta" }, r.hasta > Date.now() ? 429 : 401);
+  return json({ error: r.hasta > Date.now() ? "Demasiados intentos fallidos. Espere 15 segundos." : "Clave incorrecta" }, r.hasta > Date.now() ? 429 : 401);
 }
 const GRUPOS = ["Piloto", "Experimental", "Control"];
 const MOMENTOS = ["Pretest", "Postest"];
@@ -108,6 +110,14 @@ function autoPuntajes(resp, estado) {
     auto[it.codigo] = v != null && v === clave ? 2 : 0;
   }
   return auto;
+}
+// Orden en que se presentaron las situaciones (el postest las baraja por bloques): se guarda solo si es una permutación válida
+// de las situaciones que respeta los bloques (las cuatro primeras entre sí y las dos de revisión entre sí).
+const SITS = PC.situaciones.map((s) => s.id);
+function ordenValido(o) {
+  if (!Array.isArray(o) || o.length !== SITS.length || new Set(o).size !== SITS.length || !o.every((x) => SITS.includes(x))) return false;
+  let i = 0; for (const b of PC.bloques) { const tramo = o.slice(i, i + b.situaciones.length); if (tramo.some((x) => !b.situaciones.includes(x))) return false; i += b.situaciones.length; }
+  return true;
 }
 const llave = (codigo, m) => `${codigo}-${m}`;
 const llaveC = (codigo, m, rol) => `${codigo}-${m}-${rol}`;
@@ -223,7 +233,7 @@ export default async (req) => {
     const nResp = ITEMS.filter((it) => respondido(it, respuestas)).length;
     if (!nResp && !Object.values(estado).includes("faltante")) return json({ error: "La aplicación no tiene ninguna respuesta" }, 400);
     const row = { codigo, momento, fecha: hoy(), fecha_hora: ahora(), aplicador: String(r.aplicador || "").slice(0, 80), duracion_seg: Number(r.duracion_seg) || 0, protocolo: await protocoloDe(secreto, codigo, momento),
-      respuestas, estado, escriba, auto: autoPuntajes(respuestas, estado), terminada_antes: !!r.terminada_antes, observaciones: String(r.observaciones || "").slice(0, 800) };
+      respuestas, estado, escriba, auto: autoPuntajes(respuestas, estado), ...(ordenValido(r.orden) ? { orden: r.orden } : {}), terminada_antes: !!r.terminada_antes, observaciones: String(r.observaciones || "").slice(0, 800) };
     const k = llave(codigo, momento);
     const previo = await store("pc").get(k, { type: "json" });
     await store("pc").setJSON(k, row);

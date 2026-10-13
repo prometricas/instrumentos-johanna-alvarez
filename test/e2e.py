@@ -42,8 +42,14 @@ async def main():
                 await avanzar()
             await pg.wait_for_selector("#kSave")
         await pg.goto(U)
-        await pg.fill("#clave", "mala"); await pg.click("#btnEntrar"); await pg.wait_for_selector("#entradaMsg .aviso"); print("clave mala (con espera de 1,5 s):", await pg.text_content("#entradaMsg"))
-        await pg.fill("#clave", CLAVE); await pg.click("#btnEntrar"); await pg.wait_for_selector("#app:not(.oculto)"); await pg.wait_for_timeout(300)
+        for i in range(5):
+            await pg.fill("#clave", "mala"); await pg.click("#btnEntrar"); await pg.wait_for_selector("#entradaMsg .aviso"); await pg.wait_for_timeout(200)
+            if i == 0: print("clave mala (con espera de 1,5 s):", await pg.text_content("#entradaMsg"))
+            await pg.evaluate("document.querySelector('#entradaMsg').innerHTML = ''")
+        await pg.fill("#clave", CLAVE); await pg.click("#btnEntrar"); await pg.wait_for_selector("#entradaMsg .aviso"); msg = await pg.text_content("#entradaMsg"); print("quinto fallo bloquea 15 segundos (también con la clave buena):", msg)
+        if "15 segundos" not in msg and "segundos" not in msg: errs.append("el bloqueo no es de 15 segundos: " + msg)
+        await pg.wait_for_timeout(16000)
+        await pg.fill("#clave", CLAVE); await pg.click("#btnEntrar"); await pg.wait_for_selector("#app:not(.oculto)"); await pg.wait_for_timeout(300); print("pasados 15 s, entra con la clave buena")
         print("vacio:", (await pg.text_content("#tablaP")).strip()[:60])
         await pg.fill("#pNombre", "Paco"); await pg.click("#btnAddP"); await pg.wait_for_timeout(300)
         print("faltan campos:", await pg.text_content("#pMsg"), "| resaltados:", len(await pg.query_selector_all("#v-estudiantes .campo.falta")))
@@ -79,8 +85,26 @@ async def main():
         d = await datos(); r = next(x for x in d["pc"] if x["codigo"] == "E03" and x["momento"] == "Pretest")
         print("guardado E03 pretest:", r["estado"], "| auto:", r["auto"], "| protocolo:", r["protocolo"], "| respuestas:", len(r["respuestas"]))
         if r["estado"].get("I04") != "omitido" or r["estado"].get("I10") != "faltante" or r["auto"].get("I01") != 2 or r["auto"].get("I08") != 2 or len(r["auto"]) != 8: errs.append("el registro de E03 no quedó como se aplicó")
+        # --- postest: las situaciones salen en otro orden (por bloques), que se conserva al retomar y queda guardado
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E05"); await pg.click("#aMom button[data-m=Postest]"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
+        orden = await pg.evaluate("K.orden"); fijo = ["S1", "S2", "S3", "S4", "S5", "S6"]
+        ok_orden = sorted(orden) == fijo and orden[:4] != fijo[:4] and set(orden[:4]) == set(fijo[:4]) and set(orden[4:]) == set(fijo[4:])
+        print("orden del postest:", orden, "| permutación por bloques distinta del pretest:", ok_orden)
+        if not ok_orden: errs.append("el postest no baraja las situaciones por bloques")
+        for _ in range(3): await avanzar()
+        s = await pantalla(); primera = await pg.evaluate("K.seq[K.i].sit.id"); print("primera situación presentada:", primera, "=", orden[0], "| contador por posición:", await pg.text_content("#kCount"))
+        await avanzar(); print("primera pregunta en pantalla:", await pg.text_content("#kCount"), "| ítem:", (await pantalla())["it"])
+        await responder_item(); await avanzar(); await pg.click("#kExit"); await confirmar(); await pg.wait_for_selector("#aAvance:not(.oculto)")
+        await pg.reload(); await pg.wait_for_selector("#app:not(.oculto)"); await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_selector("#aAvance:not(.oculto)"); await pg.click("#btnContinuar"); await pg.wait_for_selector("#kid:not(.oculto)")
+        print("retoma con el mismo orden:", await pg.evaluate("K.orden") == orden)
+        if await pg.evaluate("K.orden") != orden: errs.append("al retomar cambió el orden del postest")
+        await pg.evaluate("K.i = K.seq.findIndex(x => x.tipo === 'pausa'); renderKid()"); await pg.wait_for_timeout(100); print("pausa nombra las dos historias del segundo bloque:", (await pg.text_content("#kBody .caja p.centro")).strip()[:90])
+        await aplicar_hasta_el_final(terminar_en="A05" if orden[4] == "S5" else "A06"); await pg.click("#kSave"); await pg.wait_for_timeout(1500)
+        d = await datos(); rp = next(x for x in d["pc"] if x["codigo"] == "E05"); rpre = next(x for x in d["pc"] if x["codigo"] == "E03")
+        print("orden guardado en el postest:", rp.get("orden") == orden, "| el pretest no lleva orden:", "orden" not in rpre)
+        if rp.get("orden") != orden or "orden" in rpre: errs.append("el orden del postest no quedó guardado como se presentó")
         # --- aplicación interrumpida: se retoma donde iba y luego "Terminar aquí" deja faltantes
-        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E02"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E02"); await pg.click("#aMom button[data-m=Pretest]"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
         for _ in range(4): await avanzar()  # instrucciones, práctica (sin responder), portada
         for _ in range(3): await responder_item(); await avanzar()
         await pg.click("#kExit"); await confirmar(); await pg.wait_for_selector("#aAvance:not(.oculto)"); print("aviso de avance:", (await pg.text_content("#aAvance")).strip()[:80])
@@ -92,7 +116,7 @@ async def main():
         print("E02 faltantes:", [k for k, v in r["estado"].items() if v == "faltante"][:5], "… terminada_antes:", r["terminada_antes"])
         if not r["terminada_antes"] or r["estado"].get("I09") != "faltante" or r["estado"].get("I20") != "faltante" or "I08" in r["auto"] and r["auto"]["I08"] is None: errs.append("Terminar aquí no dejó los ítems restantes como faltantes")
         # --- sin conexión al guardar: queda en cola y se envía al volver la conexión
-        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E04"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E04"); await pg.click("#aMom button[data-m=Pretest]"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
         await aplicar_hasta_el_final()
         await ctx.set_offline(True); await pg.click("#kSave"); await pg.wait_for_selector("#pendientes:not(.oculto)"); print("cola sin conexión:", (await pg.text_content("#pendientes")).strip()[:80])
         await ctx.set_offline(False)
@@ -148,7 +172,7 @@ async def main():
         d = await datos(); print("aplicación eliminada desde la ficha (con sus calificaciones):", len([x for x in d["pc"] if x["codigo"] == "E03"]), len([x for x in d["calif"] if x["codigo"] == "E03"])); await pg.keyboard.press("Escape")
         # --- papelera
         await pg.click("#tablaP .gtabs button[data-g=Control]"); await pg.wait_for_timeout(200)
-        await pg.click("#tablaP [data-del=E05]"); await confirmar(); await pg.wait_for_timeout(1000)
+        await pg.click("#tablaP [data-del=E05]"); await confirmar("E05"); await pg.wait_for_timeout(1000)
         await pg.click("#tablaP [data-del=E04]"); await confirmar("E04"); await pg.wait_for_timeout(1200)
         print("papelera:", await pg.text_content("#tablaP .papelera summary"))
         await pg.click("#tablaP .papelera summary"); await pg.click("#tablaP [data-rest=E04]"); await pg.wait_for_timeout(1200); await pg.click("#tablaP .gtabs button[data-g=Control]"); await pg.wait_for_timeout(200)
@@ -170,7 +194,7 @@ async def main():
         wb = openpyxl.load_workbook("test/descarga.xlsx")
         for ws in wb: print("  hoja", ws.title, ws.max_row - 1, "filas,", ws.max_column, "columnas:", [c.value for c in ws[1]][:10], "...", [c.value for c in ws[1]][-3:], "| momentos:", [r[4] for r in ws.iter_rows(min_row=2, values_only=True)][:4])
         enc = [c.value for c in wb["Experimental"][1]]
-        esperadas = ["Grupo", "Codigo", "Nombre", "Apellido", "Momento", "Sexo", "Edad", "Protocolo", "Indagacion", "Justificacion", "Perspectivas", "Conclusiones", "Revision", "TotalPC", "P01", "P20", "Omitidos", "Faltantes", "R01", "R02a", "R02b", "R06a_Luciana", "R06a_Samuel", "EI5a", "R17a", "R17_fin", "R20b", "EscribeAplicador"]
+        esperadas = ["Grupo", "Codigo", "Nombre", "Apellido", "Momento", "Sexo", "Edad", "Protocolo", "OrdenSituaciones", "Indagacion", "Justificacion", "Perspectivas", "Conclusiones", "Revision", "TotalPC", "P01", "P20", "Omitidos", "Faltantes", "R01", "R02a", "R02b", "R06a_Luciana", "R06a_Samuel", "EI5a", "R17a", "R17_fin", "R20b", "EscribeAplicador"]
         falt = [x for x in esperadas if x not in enc]; print("columnas esperadas presentes:", not falt, falt)
         if falt: errs.append("faltan columnas en el Excel: " + ", ".join(falt))
         async with pg.expect_download() as dl: await pg.click("#btnCopia")
