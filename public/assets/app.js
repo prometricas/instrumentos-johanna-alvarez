@@ -691,10 +691,10 @@ $('#btnBitacora').addEventListener('click', async () => {
     const { bitacora } = await api('bitacora'); const lista = bitacora.slice().reverse().slice(0, 300);
     $('#bitCuerpo').innerHTML = `<h2>Bitácora</h2><p class="guia" style="margin-bottom:12px">Registro de auditoría del servidor: cada registro, edición, aplicación, calificación, acuerdo, eliminación y copia, con fecha y hora de Colombia. ${bitacora.length > 300 ? 'Se muestran los últimos 300 de ' + bitacora.length + '; la copia de seguridad trae todos.' : bitacora.length + ' eventos.'}</p>
       ${lista.length ? `<div class="tabla"><table class="datos bit"><thead><tr><th>Fecha y hora</th><th>Evento</th><th>Detalle</th></tr></thead><tbody>${lista.map((b) => `<tr><td>${esc(b.fecha_hora)}</td><td>${esc(b.evento.replace(/_/g, ' '))}</td><td>${esc(b.detalle)}</td></tr>`).join('')}</tbody></table></div>` : '<div class="aviso nota">Aún no hay eventos.</div>'}
-      ${bitacora.length ? '<p style="margin:14px 0 0"><button class="lnk chico mal" id="btnVaciarBit" title="Borra todos los eventos; queda uno que registra el vaciado">Vaciar bitácora</button></p>' : ''}`;
+      ${bitacora.length ? '<p style="margin:14px 0 0"><button class="lnk chico mal" id="btnVaciarBit" title="Borra todos los eventos; la bitácora queda en cero">Vaciar bitácora</button></p>' : ''}`;
     $('#bitacora').classList.remove('oculto');
     $('#btnVaciarBit')?.addEventListener('click', async () => {
-      if (!(await dialogo({ titulo: 'Vaciar bitácora', texto: `Se borran los ${bitacora.length} eventos de auditoría. No afecta a estudiantes, aplicaciones ni calificaciones. Quedará un único evento que registra el vaciado.`, ok: 'Vaciar', peligro: true, escribir: 'VACIAR' }))) return;
+      if (!(await dialogo({ titulo: 'Vaciar bitácora', texto: `Se borran los ${bitacora.length} eventos de auditoría y la bitácora queda en cero. No afecta a estudiantes, aplicaciones ni calificaciones. No se puede deshacer.`, ok: 'Vaciar', peligro: true, escribir: 'VACIAR' }))) return;
       try { const r = await api('bitacora', { method: 'DELETE' }); toast(`Bitácora vaciada: ${r.borrados} eventos borrados`); $('#btnBitacora').click(); } catch (e) { toast('No se pudo vaciar: ' + e.message, true); }
     });
   } catch (e) { toast('No se pudo leer la bitácora: ' + e.message, true); }
