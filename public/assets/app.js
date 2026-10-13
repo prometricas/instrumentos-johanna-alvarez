@@ -97,7 +97,7 @@ const ET = { Pretest: 'Pre', Postest: 'Post' };
 function verEstudiantes() {
   const ps = D.participantes;
   $('#resumenP').textContent = ps.length ? `${ps.length} estudiante${ps.length > 1 ? 's' : ''} · ` + porGrupo(ps).map(([g, l]) => `${l.length} ${g.toLowerCase()}`).join(' · ') : '';
-  const marcaApl = (c, m) => { const r = reg(c, m); return r ? `<span class="estado si" role="button" tabindex="0" data-ficha="${esc(c)}" title="Aplicada el ${esc(r.fecha)}. Pulse para ver la ficha">${ET[m]} ✓</span>` : `<span class="estado pend" role="button" tabindex="0" data-apl="${esc(c)}" data-m="${m}" title="Sin aplicar. Pulse para aplicar ahora">${ET[m]} ·</span>`; };
+  const marcaApl = (c, m) => { const r = reg(c, m); return r ? (r.incompleta ? `<span class="estado medio" role="button" tabindex="0" data-apl="${esc(c)}" data-m="${m}" title="Incompleta: quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')}. Pulse para continuarla">${ET[m]} ½</span>` : `<span class="estado si" role="button" tabindex="0" data-ficha="${esc(c)}" title="Aplicada el ${esc(r.fecha)}. Pulse para ver la ficha">${ET[m]} ✓</span>`) : `<span class="estado pend" role="button" tabindex="0" data-apl="${esc(c)}" data-m="${m}" title="Sin aplicar. Pulse para aplicar ahora">${ET[m]} ·</span>`; };
   const marcaCal = (c, m) => {
     const r = reg(c, m); if (!r) return `<span class="estado nada" title="Aún no se aplica">${ET[m]} –</span>`;
     const e = estadoCalif(cal(c, m)), n = ['1', '2'].filter((x) => cal(c, m)[x]?.completa).length;
@@ -162,7 +162,7 @@ $('#btnAddP').addEventListener('click', async () => {
 /* ---------- ficha del estudiante ---------- */
 const fmtDur = (seg) => (seg >= 90 ? `${Math.round(seg / 60)} min` : `${seg} s`);
 function avatar(sexo) { // niño o niña según el sexo registrado
-  const nina = sexo === 'Femenino', pelo = '#4A3222', piel = '#F5C9A6', ropa = nina ? '#648ACA' : '#003058', id = nina ? 'av-f' : 'av-m';
+  const nina = sexo === 'Femenino', pelo = '#4A3222', piel = '#F5C9A6', ropa = nina ? '#E84C8B' : '#1A2AC2', id = nina ? 'av-f' : 'av-m';
   return `<svg class="avatar" viewBox="0 0 64 64" aria-hidden="true"><defs><clipPath id="${id}"><circle cx="32" cy="32" r="31"/></clipPath></defs><circle cx="32" cy="32" r="31" fill="#E6EDF6"/><g clip-path="url(#${id})">
     <path d="M10 66c0-12 10-19 22-19s22 7 22 19z" fill="${ropa}"/>${nina ? `<path d="M16 31c0-12 7-19 16-19s16 7 16 19v16H16z" fill="${pelo}"/>` : ''}
     <circle cx="32" cy="29" r="12.5" fill="${piel}"/>
@@ -185,7 +185,7 @@ function fichaPrueba(codigo) {
   const obs = (r) => (r.observaciones ? ` · <i>${esc(r.observaciones)}</i>` : '');
   const meta = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<div class="meta"><span><b>${m}</b> sin aplicar</span><button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Aplicar ahora</button></div>`;
     const om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante');
-    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.terminada_antes ? ' · terminada antes del final' : ''}${obs(r)}${chipCal(codigo, m)}</span><button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
+    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.incompleta ? ` · <b style="color:#B54E00">incompleta</b> (quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')})` : ''}${obs(r)}${chipCal(codigo, m)}</span>${r.incompleta ? `<button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Continuar</button>` : ''}<button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
   const pend = regs.some((r, i) => r && S[i].total == null) ? '<p class="guia" style="margin:6px 0 0;font-size:.85em">Las sumas aparecen cuando la puntuación acordada está completa y ningún ítem queda sin oportunidad de respuesta.</p>' : '';
   return `<div class="prueba"><h3>${esc(PC.corto)}<span>${esc(PC.titulo)}</span></h3><table class="dims"><thead><tr><th></th><th>Pretest</th><th>Postest</th><th title="Postest menos pretest">Cambio</th></tr></thead><tbody>${filas}</tbody></table>${pend}${meta}</div>`;
 }
@@ -274,10 +274,13 @@ $('#btnStart').addEventListener('click', async () => {
   if (!codigo) return (m.innerHTML = '<div class="aviso mal">Registre al estudiante antes de aplicar.</div>');
   if (!apl) return (m.innerHTML = '<div class="aviso mal">Escriba el nombre del aplicador.</div>');
   localStorage.setItem('aplicador', apl);
-  const prev = reg(codigo, momento);
-  if (prev && !(await dialogo({ titulo: 'Ya existe esta aplicación', texto: `${codigo} ${nombreDe(codigo)} ya tiene la prueba en ${momento} (${prev.fecha}). Si continúa, al guardar se reemplazará ese registro y se descartarán sus calificaciones.`, ok: 'Continuar y reemplazar', peligro: true }))) return;
-  const a = leerAvance();
+  const prev = reg(codigo, momento), a = leerAvance();
   if (a && a.codigo === codigo && a.momento === momento && (await dialogo({ titulo: 'Aplicación sin terminar', texto: 'Hay un avance guardado de esta misma aplicación en este dispositivo.', ok: 'Continuar donde iba', cancelar: 'Empezar de nuevo' }))) return startKid({ codigo, momento, aplicador: apl }, a);
+  if (prev && prev.incompleta) {
+    const r = await dialogo({ titulo: 'Aplicación incompleta', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta (${prev.fecha_hora || prev.fecha}; quedó en el ítem ${ITEM[prev.interrumpida_en] ? (ITEM[prev.interrumpida_en].num || prev.interrumpida_en) : '?'}). Puede continuar desde donde quedó o empezar de nuevo (se reemplaza lo guardado).`, ok: 'Continuar donde quedó', otro: 'Empezar de nuevo', cancelar: 'Cancelar' });
+    if (!r) return;
+    if (r === true) { m.innerHTML = ''; return startKid({ codigo, momento, aplicador: apl }, avanceDesdeRegistro(prev)); }
+  } else if (prev && !(await dialogo({ titulo: 'Ya existe esta aplicación', texto: `${codigo} ${nombreDe(codigo)} ya tiene la prueba en ${momento} (${prev.fecha}). Si continúa, al guardar se reemplazará ese registro y se descartarán sus calificaciones.`, ok: 'Continuar y reemplazar', peligro: true }))) return;
   m.innerHTML = ''; startKid({ codigo, momento, aplicador: apl });
 });
 
@@ -313,9 +316,19 @@ function secuencia(orden) {
   let pos = 0; for (const x of seq) if (x.tipo === 'item' && !x.prac && !x.it.auxiliar) x.pos = ++pos; // posición en el orden presentado
   return seq;
 }
+// Avance reconstruido desde una aplicación incompleta guardada en el servidor: se continúa en la pregunta donde quedó.
+function avanceDesdeRegistro(r) {
+  const orden = r.orden || ordenSituaciones(r.momento), seq = secuencia(orden), estado = { ...(r.estado || {}) };
+  for (const c of r.pendientes || []) delete estado[c];
+  let i = seq.findIndex((x) => x.tipo === 'item' && x.it && x.it.codigo === r.interrumpida_en);
+  if (i < 0) i = seq.findIndex((x) => x.tipo === 'item' && x.it && (r.pendientes || []).includes(x.it.codigo));
+  if (i < 0) i = seq.length - 1;
+  while (i > 0 && seq[i - 1].tipo === 'etapa' && seq[i - 1].g === seq[i].g) i--; // retomar desde la portada de esa hoja
+  return { orden, i, resp: r.respuestas || {}, estado, transcurrido: (r.duracion_seg || 0) * 1000, fecha_inicio: r.fecha };
+}
 function startKid(cfg, avance = null) {
   const orden = (avance && avance.orden) || ordenSituaciones(cfg.momento), seq = secuencia(orden);
-  K = { ...cfg, orden, seq, i: avance ? Math.min(avance.i, seq.length - 2) : 0, resp: avance ? avance.resp : {}, estado: avance ? avance.estado || {} : {}, escriba: avance ? avance.escriba || {} : {}, pracResp: {}, escribaDef: localStorage.getItem('escriba') || 'nino', t0: avance ? Date.now() - (avance.transcurrido || 0) : Date.now(), terminada_antes: avance ? !!avance.terminada_antes : false };
+  K = { ...cfg, orden, seq, i: avance ? Math.min(avance.i, seq.length - 2) : 0, resp: avance ? avance.resp : {}, estado: avance ? avance.estado || {} : {}, pracResp: {}, t0: avance ? Date.now() - (avance.transcurrido || 0) : Date.now(), fecha_inicio: (avance && avance.fecha_inicio) || hoy() };
   $('#kTag').innerHTML = `<b>${esc(PC.corto)}</b> · ${esc(cfg.codigo)} ${esc(nombreDe(cfg.codigo))} · ${esc(cfg.momento)}`;
   $('#kAyudaPanel').innerHTML = guionHtml(); $('#kAyudaPanel').classList.add('oculto');
   $('#kid').classList.remove('oculto'); $('#app').classList.add('oculto');
@@ -323,14 +336,20 @@ function startKid(cfg, avance = null) {
 }
 const valorDe = (scr, k) => (scr.prac ? K.pracResp[k] : K.resp[k]);
 function setValor(scr, k, v) { if (scr.prac) K.pracResp[k] = v; else K.resp[k] = v; guardarAvance(); actualizarNav(); }
+// Tema de color de la pantalla: cada situación tiene el suyo (y la práctica, la pausa y el final usan el azul claro).
+const TEMA_BASE = { color: '#3B9DF2', suave: '#E6F2FD', oscuro: '#1F6FC2', fondo: '#EEF6FE' };
+function aplicarTema(t = TEMA_BASE) { const k = $('#kid'); k.style.setProperty('--k', t.color); k.style.setProperty('--k-suave', t.suave); k.style.setProperty('--k-oscuro', t.oscuro); k.style.setProperty('--k-fondo', t.fondo); }
+const imgSit = (s) => (s.imagen ? `<img class="k-img" src="${esc(s.imagen)}" alt="">` : '');
+function nuevaInfoHtml(et) { return `<div class="nueva"><span class="k-chip">Información nueva</span><p>${esc(et.nueva_info.intro)}</p><ul>${et.nueva_info.puntos.map((p) => `<li>${esc(p)}</li>`).join('')}</ul><p class="cierre">${esc(et.nueva_info.cierre)}</p></div>`; }
 function situacionHtml(scr) {
   const s = scr.sit, et = scr.et;
-  let h = `<p class="eti">${scr.prac ? 'Práctica' : 'Situación ' + s.num}</p><h3>${esc(s.titulo)}</h3><p>${esc(s.texto)}</p>`;
+  let h = imgSit(s) + `<span class="k-chip">${scr.prac ? 'Práctica' : 'Situación ' + s.num}</span><h3>${esc(s.titulo)}</h3><p>${esc(s.texto)}</p>`;
   if (s.dialogo) h += s.dialogo.map((d) => `<div class="dialogo-sit"><span class="quien">${esc(d.quien)}</span><span class="dice">—${esc(d.dice)}</span></div>`).join('');
   if (s.puntos) h += `<ul>${s.puntos.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>`;
   if (s.cierre) h += `<p>${esc(s.cierre)}</p>`;
-  if (et && et.nueva_info) h += `<div class="nueva"><p class="eti">Información nueva</p><p>${esc(et.nueva_info.intro)}</p><ul>${et.nueva_info.puntos.map((p) => `<li>${esc(p)}</li>`).join('')}</ul><p class="cierre">${esc(et.nueva_info.cierre)}</p></div>`;
-  return `<div class="k-sit">${h}</div>`;
+  if (et && et.nueva_info) h += nuevaInfoHtml(et);
+  const largo = (s.texto || '').length + (s.puntos || []).join('').length + (s.dialogo || []).map((d) => d.dice).join('').length + (s.cierre || '').length;
+  return `<div class="k-sit ${(et && et.nueva_info) || largo > 330 ? 'larga' : ''}">${h}</div>`;
 }
 const letraDe = (i) => String.fromCharCode(65 + i);
 function parteHtml(scr, p) {
@@ -341,12 +360,8 @@ function parteHtml(scr, p) {
   if (p.etiqueta) h += `<p class="eti-chica">${esc(p.etiqueta)}</p>`;
   if (p.tipo === 'opcion') h += `<div class="opts ${p.compacto ? 'compacto fila-h' : ''}">${p.opciones.map((o, i) => `<button class="opt ${v === o.v ? 'sel' : ''}" data-opt="${k}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}>${p.letras ? `<span class="letra">${esc(o.v)}</span>` : '<span class="circ"></span>'}<span>${esc(o.t)}</span></button>`).join('')}</div>`;
   else if (p.tipo === 'multiple') h += `<div class="opts">${p.opciones.map((o) => `<button class="opt ${(v || []).includes(o.v) ? 'sel' : ''}" data-multi="${k}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}><span class="casilla">✓</span><span>${esc(o.t)}</span></button>`).join('')}</div><p class="cuenta" data-cuenta="${k}">${cuentaTxt(p, v)}</p>`;
-  else if (p.tipo === 'union') h += `<ul class="leyenda">${p.opciones.map((o) => `<li><b>${esc(o.v)}</b><span>${esc(o.t)}</span></li>`).join('')}</ul><div class="union">${p.filas.map((f) => `<div class="fila-u"><span class="quien">${esc(f.nombre)}</span><span class="flecha">→</span><div class="letras">${p.opciones.map((o) => `<button class="${(v || {})[f.id] === o.v ? 'sel' : ''}" data-union="${k}" data-f="${f.id}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}>${esc(o.v)}</button>`).join('')}</div></div>`).join('')}</div>`;
-  else if (p.tipo === 'texto') {
-    const esc1 = (!scr.prac && K.escriba[k]) || K.escribaDef;
-    h += `<div class="k-texto">${p.prefijo ? `<p class="pref">${esc(p.prefijo)}…</p>` : ''}<textarea data-texto="${k}" rows="${p.lineas || 2}" placeholder="Escribe aquí" ${bloq ? 'disabled' : ''}>${esc(v || '')}</textarea>` +
-      (scr.prac ? '' : `<div class="escriba"><span>Escribe:</span><div class="seg"><button data-escriba="${k}" data-v="nino" class="${esc1 === 'nino' ? 'activo' : ''}">el niño o la niña</button><button data-escriba="${k}" data-v="aplicador" class="${esc1 === 'aplicador' ? 'activo' : ''}">el aplicador, al dictado</button></div></div>`) + '</div>';
-  }
+  else if (p.tipo === 'union') h += `<ul class="leyenda">${p.opciones.map((o) => `<li><b class="letra l${esc(o.v).toLowerCase()}">${esc(o.v)}</b><span>${esc(o.t)}</span></li>`).join('')}</ul><div class="union">${p.filas.map((f) => `<div class="fila-u"><span class="quien">${esc(f.nombre)}</span><span class="flecha">→</span><div class="letras">${p.opciones.map((o) => `<button class="${(v || {})[f.id] === o.v ? 'sel' : ''}" data-union="${k}" data-f="${f.id}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}>${esc(o.v)}</button>`).join('')}</div></div>`).join('')}</div>`;
+  else if (p.tipo === 'texto') h += `<div class="k-texto">${p.prefijo ? `<p class="pref">${esc(p.prefijo)}…</p>` : ''}<textarea data-texto="${k}" rows="${p.lineas || 2}" placeholder="Escribe aquí" ${bloq ? 'disabled' : ''}>${esc(v || '')}</textarea></div>`;
   return h + '</div>';
 }
 const cuentaTxt = (p, v) => { const n = (v || []).length; return `Has marcado ${n} de ${p.n}.`; };
@@ -362,52 +377,60 @@ function renderKid() {
   const scr = K.seq[K.i], body = $('#kBody');
   const hechos = PUNTUABLES.filter((it) => respondido(it, K.resp) || K.estado[it.codigo]).length;
   $('#kProg').style.width = (100 * hechos / PUNTUABLES.length) + '%';
-  $('#kNav').classList.remove('oculto'); $('#kSinResp').classList.add('oculto'); $('#kFin').classList.toggle('oculto', scr.tipo === 'fin' || scr.g === 0);
+  $('#kNav').classList.remove('oculto'); $('#kSinResp').classList.add('oculto');
   $('#kBack').disabled = K.i === 0 || K.seq[K.i - 1].g < scr.g; // atrás solo dentro de la misma hoja
   $('#kNext').textContent = 'Siguiente'; $('#kNext').disabled = false;
   body.className = 'kid-body' + (scr.tipo === 'item' ? '' : ' solo');
+  aplicarTema(scr.sit && scr.sit.tema ? scr.sit.tema : scr.prac ? PC.practica.tema : TEMA_BASE);
   if (scr.tipo === 'inicio') {
     $('#kCount').textContent = 'Inicio';
-    body.innerHTML = `<div class="k-inter"><div class="caja"><p class="eti">${esc(PC.titulo)}</p><h3>Instrucciones</h3><p>${esc(PC.instrucciones)}</p><p class="nota centro">Primero hay una práctica corta que no se guarda.</p><div class="aplicador"><b>Aplicador:</b> lea las instrucciones en voz alta y compruebe que el niño o la niña entiende cómo marcar una opción y dónde escribir. ${esc(K.codigo)} ${esc(nombreDe(K.codigo))} · ${esc(K.momento)}.</div></div></div>`;
+    body.innerHTML = `<div class="k-inter"><div class="caja">${imgSit(PC.practica)}<div><span class="k-chip">${esc(PC.titulo)}</span><h3>¡Hola! Vamos a empezar</h3><p>${esc(PC.instrucciones)}</p><p class="nota">Primero hay una práctica corta que no se guarda.</p><div class="aplicador"><b>Aplicador:</b> lea las instrucciones en voz alta y compruebe que el niño o la niña entiende cómo marcar una opción y dónde escribir. ${esc(K.codigo)} ${esc(nombreDe(K.codigo))} · ${esc(K.momento)}.</div></div></div></div>`;
     $('#kNext').textContent = 'Empezar la práctica';
   } else if (scr.tipo === 'pausa') {
     $('#kCount').textContent = 'Pausa';
-    body.innerHTML = `<div class="k-inter"><div class="caja"><p class="eti">Pausa breve</p><h3>Vamos a descansar un momento</h3><p class="centro">Después seguimos con las dos últimas historias: ${K.orden.slice(-2).map((id) => PC.situaciones.find((x) => x.id === id).titulo.toLowerCase()).join(' y ')}.</p><div class="aplicador"><b>Aplicador:</b> pausa breve antes de las situaciones 5 y 6. En ellas, la primera elección se cierra antes de mostrar la información nueva. Las respuestas anteriores ya quedaron cerradas.</div></div></div>`;
+    body.innerHTML = `<div class="k-inter"><div class="caja">${imgSit(PC.practica)}<div><span class="k-chip">Pausa breve</span><h3>Vamos a descansar un momento</h3><p>Después seguimos con las dos últimas historias: ${K.orden.slice(-2).map((id) => PC.situaciones.find((x) => x.id === id).titulo.toLowerCase()).join(' y ')}.</p><div class="aplicador"><b>Aplicador:</b> pausa breve antes de las situaciones 5 y 6. En ellas, la primera elección se cierra antes de mostrar la información nueva. Las respuestas anteriores ya quedaron cerradas.</div></div></div></div>`;
     $('#kNext').textContent = 'Continuar';
   } else if (scr.tipo === 'etapa') {
     const s = scr.sit, et = scr.et; $('#kCount').textContent = `Situación ${s.num}`;
-    let h = `<p class="eti">Situación ${s.num}${scr.e ? ' · ' + esc(et.titulo) : ''}</p><h3>${esc(s.titulo)}</h3>`;
-    if (!scr.e) h += `<p>${esc(s.texto)}</p>${s.dialogo ? s.dialogo.map((d) => `<p><span style="color:var(--tinta-2);font-size:.85em">${esc(d.quien)}</span><br><i>—${esc(d.dice)}</i></p>`).join('') : ''}${s.puntos ? `<ul style="text-align:left">${s.puntos.map((p) => `<li style="font-size:clamp(18px,1.35vw,23px);line-height:1.5">${esc(p)}</li>`).join('')}</ul>` : ''}${s.cierre ? `<p>${esc(s.cierre)}</p>` : ''}`;
-    else if (et.nueva_info) h += `<div class="nueva"><p class="eti" style="margin-bottom:4px">Información nueva</p><p style="margin:0">${esc(et.nueva_info.intro)}</p><ul>${et.nueva_info.puntos.map((p) => `<li>${esc(p)}</li>`).join('')}</ul></div><p class="centro"><b>${esc(et.nueva_info.cierre)}</b></p>`;
-    else h += `<p class="centro">Ahora vienen más preguntas sobre esta historia.</p>`;
+    let h = `<span class="k-chip">Situación ${s.num}${scr.e ? ' · ' + esc(et.titulo) : ''}</span><h3>${esc(s.titulo)}</h3>`;
+    if (!scr.e) h += `<p>${esc(s.texto)}</p>${s.dialogo ? s.dialogo.map((d) => `<div class="dialogo-sit" style="margin-bottom:8px"><span class="quien" style="display:block;color:var(--tinta-2);font-size:.82em;font-weight:700">${esc(d.quien)}</span><p style="font-style:italic;padding-left:12px;border-left:4px solid var(--k-suave);margin:0">—${esc(d.dice)}</p></div>`).join('') : ''}${s.puntos ? `<ul>${s.puntos.map((p) => `<li>${esc(p)}</li>`).join('')}</ul>` : ''}${s.cierre ? `<p>${esc(s.cierre)}</p>` : ''}`;
+    else if (et.nueva_info) h += nuevaInfoHtml(et);
+    else h += `<p>Ahora vienen más preguntas sobre esta historia.</p>`;
     h += `<div class="aplicador"><b>Aplicador:</b> ${scr.e ? 'nueva hoja: las respuestas de la hoja anterior ya quedaron cerradas y no se pueden cambiar.' : 'lea la historia en voz alta, literalmente; luego pulse Continuar para ver las preguntas (la historia sigue visible al lado).'}${scr.e && !et.nueva_info ? ' Las opciones de esta parte podrían sugerir respuestas de la anterior; por eso no se vuelve atrás.' : ''}</div>`;
-    body.innerHTML = `<div class="k-inter"><div class="caja">${h}</div></div>`;
+    body.innerHTML = `<div class="k-inter"><div class="caja">${imgSit(s)}<div>${h}</div></div></div>`;
     $('#kNext').textContent = scr.e ? 'Continuar' : 'Ver las preguntas';
   } else if (scr.tipo === 'item') {
     const it = scr.it, dep = dependencia(scr);
     if (dep && !dep.ok && !K.estado[it.codigo]) { K.estado[it.codigo] = 'faltante'; guardarAvance(); }
     const e = scr.prac ? null : K.estado[it.codigo];
-    $('#kCount').textContent = scr.prac ? `Práctica ${scr.pracN} de ${PC.practica.items.length}` : it.num ? `Pregunta ${scr.pos} de ${PUNTUABLES.length}` : 'Elección inicial';
+    const pos = scr.prac ? `Práctica ${scr.pracN} de ${PC.practica.items.length}` : it.num ? `Pregunta ${scr.pos} de ${PUNTUABLES.length}` : 'Elección inicial';
+    $('#kCount').textContent = pos;
     const tag = e ? `<span class="om ${e === 'faltante' ? 'falt' : ''}">${e === 'omitido' ? 'Sin respuesta: omitió' : 'Sin oportunidad: dato faltante'}</span>` : '';
-    body.innerHTML = situacionHtml(scr) + `<div class="k-preg"><p class="num"><span>${scr.prac ? 'Práctica (no se guarda)' : it.num ? `Ítem ${it.num}` : esc(it.etiqueta)}</span>${tag}</p>${dep ? dep.html : ''}${it.partes.map((p) => parteHtml(scr, p)).join('')}</div>`;
+    body.innerHTML = situacionHtml(scr) + `<div class="k-preg"><p class="num"><span class="pos">${pos}</span><span class="it">${scr.prac ? 'No se guarda' : it.num ? `Ítem ${it.num}` : esc(it.etiqueta)}</span>${tag}</p>${dep ? dep.html : ''}${it.partes.map((p) => parteHtml(scr, p)).join('')}</div>`;
     $('#kSinResp').classList.toggle('oculto', !!scr.prac); $('#kSinResp').textContent = e ? 'Quitar la marca y responder' : 'Sin respuesta';
     if (K.i === K.seq.length - 2) $('#kNext').textContent = 'Terminar';
     actualizarNav();
     body.querySelector('.k-preg')?.scrollTo(0, 0);
   } else if (scr.tipo === 'fin') renderFin();
 }
-function itemListo(scr) { // hay algo que registrar: alguna parte respondida o el ítem marcado como sin respuesta
-  const it = scr.it; if (!scr.prac && K.estado[it.codigo]) return true;
-  return it.partes.some((p) => !vacio(valorDe(scr, it.codigo + p.id)));
+// Para avanzar hay que responder todas las partes del ítem (en «marca las dos», al menos dos marcas; en las uniones, todas las
+// filas; en los textos, algo escrito). La única excepción es que el aplicador registre el ítem como «Sin respuesta»
+// (omitió o sin oportunidad), que es la vía prevista por la guía de puntuación.
+function parteLista(scr, p) {
+  const v = valorDe(scr, scr.it.codigo + p.id); if (vacio(v)) return false;
+  if (p.tipo === 'multiple') return v.length >= (p.n || 1);
+  if (p.tipo === 'union') return p.filas.every((f) => v[f.id]);
+  if (p.tipo === 'texto') return String(v).trim().length > 0;
+  return true;
 }
-function actualizarNav() { const scr = K.seq[K.i]; if (scr.tipo === 'item') $('#kNext').disabled = !itemListo(scr) && !scr.prac; }
+function itemListo(scr) { const it = scr.it; if (!scr.prac && K.estado[it.codigo]) return true; return it.partes.every((p) => parteLista(scr, p)); }
+function actualizarNav() { const scr = K.seq[K.i]; if (scr.tipo === 'item') $('#kNext').disabled = !itemListo(scr); }
 $('#kBody').addEventListener('click', (e) => {
   const scr = K && K.seq[K.i]; if (!scr || scr.tipo !== 'item') return;
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   if (b.dataset.opt) { setValor(scr, b.dataset.opt, b.dataset.v); b.parentElement.querySelectorAll('.opt').forEach((x) => x.classList.toggle('sel', x === b)); }
   else if (b.dataset.multi) { const k = b.dataset.multi, p = scr.it.partes.find((x) => scr.it.codigo + x.id === k); let v = (valorDe(scr, k) || []).slice(); v = v.includes(b.dataset.v) ? v.filter((x) => x !== b.dataset.v) : p.opciones.map((o) => o.v).filter((x) => v.includes(x) || x === b.dataset.v); setValor(scr, k, v); b.classList.toggle('sel', v.includes(b.dataset.v)); $(`[data-cuenta="${k}"]`).textContent = cuentaTxt(p, v); }
   else if (b.dataset.union) { const k = b.dataset.union, v = { ...(valorDe(scr, k) || {}) }; v[b.dataset.f] = b.dataset.v; setValor(scr, k, v); b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b)); }
-  else if (b.dataset.escriba) { K.escriba[b.dataset.escriba] = b.dataset.v; K.escribaDef = b.dataset.v; localStorage.setItem('escriba', b.dataset.v); guardarAvance(); b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('activo', x === b)); }
 });
 $('#kBody').addEventListener('input', (e) => { const scr = K && K.seq[K.i]; if (!scr || scr.tipo !== 'item' || !e.target.dataset.texto) return; setValor(scr, e.target.dataset.texto, e.target.value); });
 $('#kSinResp').addEventListener('click', async () => {
@@ -417,26 +440,34 @@ $('#kSinResp').addEventListener('click', async () => {
   if (!r) return;
   K.estado[it.codigo] = r === 'otro' ? 'faltante' : 'omitido'; guardarAvance(); renderKid();
 });
-$('#kNext').addEventListener('click', async () => {
+$('#kNext').addEventListener('click', () => {
   const scr = K.seq[K.i];
-  if (scr.tipo === 'item' && !scr.prac && !K.estado[scr.it.codigo]) {
-    const faltan = scr.it.partes.filter((p) => vacio(K.resp[scr.it.codigo + p.id]));
-    if (faltan.length && !(await dialogo({ titulo: 'Partes sin responder', texto: `En este ítem falta: ${faltan.map((p) => p.pregunta || p.prefijo + '…').join(' / ')}. ¿Continuar y dejarlo así?`, ok: 'Continuar así', cancelar: 'Volver a la pregunta' }))) return;
-  }
-  if (K.i < K.seq.length - 1) { K.i++; guardarAvance(); renderKid(); }
+  if (scr.tipo === 'item' && !itemListo(scr)) return; // no se avanza con partes sin responder
+  if (K.i < K.seq.length - 1) { K.i++; guardarAvance(); renderKid(); if (scr.tipo === 'item' && !scr.prac && K.seq[K.i].tipo !== 'fin') guardarParcial(); }
 });
 $('#kBack').addEventListener('click', () => { if (K.i > 0 && !$('#kBack').disabled) { K.i--; guardarAvance(); renderKid(); } });
-$('#kFin').addEventListener('click', async () => {
-  const pend = ITEMS.filter((it) => !respondido(it, K.resp) && !K.estado[it.codigo]);
-  if (!(await dialogo({ titulo: 'Terminar aquí', texto: `Se guarda lo respondido hasta ahora. ${pend.length ? `Los ${pend.length} ítems que faltan quedan como dato faltante (sin oportunidad), no como 0.` : 'No queda ningún ítem pendiente.'} Úselo cuando la aplicación se interrumpe y no puede continuar.`, ok: 'Terminar y revisar', cancelar: 'Seguir aplicando' }))) return;
-  pend.forEach((it) => (K.estado[it.codigo] = 'faltante')); K.terminada_antes = true;
-  K.i = K.seq.length - 1; guardarAvance(); renderKid();
-});
-function guardarAvance() { if (!K) return; localStorage.setItem('avance', JSON.stringify({ codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, orden: K.orden, i: K.i, resp: K.resp, estado: K.estado, escriba: K.escriba, terminada_antes: K.terminada_antes, transcurrido: Date.now() - K.t0, fecha: new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) })); }
+function guardarAvance() { if (!K) return; localStorage.setItem('avance', JSON.stringify({ codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, orden: K.orden, i: K.i, resp: K.resp, estado: K.estado, transcurrido: Date.now() - K.t0, fecha_inicio: K.fecha_inicio, fecha: new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) })); }
+// Las respuestas quedan siempre guardadas: tras cada pregunta se envía al servidor la aplicación como incompleta (los ítems no
+// alcanzados quedan como dato faltante) y se puede continuar después desde donde quedó, en este o en otro dispositivo.
+// Sin conexión no pasa nada: el avance sigue en este dispositivo y la aplicación completa se envía al final (o queda en cola).
+let guardandoParcial = null;
+function filaParcial() {
+  const pend = K.seq.filter((x, j) => x.tipo === 'item' && !x.prac && j >= K.i).map((x) => x.it.codigo).filter((c) => !respondido(ITEM[c], K.resp) && !K.estado[c]);
+  const actual = K.seq[K.i], en = actual.tipo === 'item' && !actual.prac ? actual.it.codigo : (pend[0] || '');
+  return { codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, duracion_seg: Math.round((Date.now() - K.t0) / 1000), fecha_inicio: K.fecha_inicio, respuestas: K.resp, estado: K.estado, ...(K.momento === 'Postest' ? { orden: K.orden } : {}), incompleta: true, pendientes: pend, interrumpida_en: en, observaciones: '' };
+}
+async function guardarParcial() {
+  if (!K || K.seq[K.i].g === 0 || !PUNTUABLES.some((it) => respondido(it, K.resp) || K.estado[it.codigo])) return false; // nada que guardar antes de la primera respuesta
+  if (guardandoParcial) await guardandoParcial.catch(() => {});
+  guardandoParcial = api('registro', { method: 'PUT', body: { row: filaParcial() } });
+  try { await guardandoParcial; return true; } catch { return false; } finally { guardandoParcial = null; }
+}
 $('#kExit').addEventListener('click', async () => {
   const empezada = K && (Object.keys(K.resp).length > 0 || Object.keys(K.estado).length > 0) && K.seq[K.i].tipo !== 'fin';
-  if (empezada && !(await dialogo({ titulo: 'Salir de la aplicación', texto: 'El avance queda guardado en este dispositivo y puede continuar después desde "Aplicar al estudiante". Si la aplicación no va a continuar, use "Terminar aquí" para guardarla con los ítems que faltan como dato faltante.', ok: 'Salir', cancelar: 'Seguir aquí' }))) return;
-  if (!empezada) localStorage.removeItem('avance');
+  if (!empezada) { localStorage.removeItem('avance'); return cerrarKid(); }
+  if (!(await dialogo({ titulo: 'Salir de la aplicación', texto: 'Lo respondido hasta ahora queda guardado y la aplicación queda incompleta (los ítems que faltan, como dato faltante). Se puede continuar después desde "Aplicar al estudiante".', ok: 'Guardar y salir', cancelar: 'Seguir aquí' }))) return;
+  const ok = await guardarParcial();
+  toast(ok ? 'Aplicación guardada como incompleta' : 'Sin conexión: el avance queda guardado en este dispositivo');
   cerrarKid();
 });
 $('#kAyudaBtn').addEventListener('click', () => $('#kAyudaPanel').classList.toggle('oculto'));
@@ -455,16 +486,16 @@ function renderFin() {
   const auto = autoPuntajes(resp, estado), cerr = PUNTUABLES.filter(esCerrado), autoN = cerr.filter((it) => auto[it.codigo] != null), suma = autoN.reduce((s, it) => s + auto[it.codigo], 0);
   const om = PUNTUABLES.filter((it) => estado[it.codigo] === 'omitido' || (!estado[it.codigo] && !respondido(it, resp))).map((it) => it.num), fa = PUNTUABLES.filter((it) => estado[it.codigo] === 'faltante').map((it) => it.num);
   const resps = PUNTUABLES.length - om.length - fa.length;
-  $('#kProg').style.width = '100%'; $('#kCount').textContent = 'Fin'; $('#kNav').classList.add('oculto'); $('#kFin').classList.add('oculto');
-  $('#kBody').innerHTML = `<div class="k-fin-grid"><div class="caja kid-fin"><h3>¡Muy bien, terminamos!</h3>
+  $('#kProg').style.width = '100%'; $('#kCount').textContent = 'Fin'; $('#kNav').classList.add('oculto');
+  $('#kBody').innerHTML = `<div class="k-fin-grid"><div class="caja kid-fin"><p class="estrellas">⭐ 🌟 ⭐</p><h3>¡Muy bien, terminamos!</h3>
     <p style="color:var(--tinta-2);margin:0">Resumen para el aplicador: ${esc(codigo)} ${esc(nombreDe(codigo))}, ${esc(momento)}, ${fmtDur(dur)}.</p>
     <div class="res"><span>${resps} de ${PUNTUABLES.length} ítems respondidos</span>${om.length ? `<span class="om">Omitidos (0 puntos): ${om.join(', ')}</span>` : ''}${fa.length ? `<span class="falt">Sin oportunidad (dato faltante): ${fa.join(', ')}</span>` : ''}</div>
     <table><tr><td>Ítems cerrados calificados con la clave (${autoN.length} de ${cerr.length})</td><td>${suma} de ${autoN.length * 2}</td></tr><tr><td>Ítems de rúbrica pendientes de calificar en el módulo Calificar</td><td>${RUBRICA.filter((it) => estado[it.codigo] !== 'faltante' && estado[it.codigo] !== 'omitido' && respondido(it, resp)).length}</td></tr></table>
     <div class="campo"><label for="kObs">Observaciones e incidencias (opcional)</label><textarea id="kObs" rows="2" placeholder="Por ejemplo: se le volvió a leer la situación 3; pausa de 5 minutos; apoyo para escribir en los ítems 10 y 15"></textarea></div>
-    <div class="fila" style="margin-top:12px"><button class="btn grande" id="kSave">Guardar</button><button class="btn sec grande" id="kDiscard">Descartar</button></div><div id="kMsg" style="margin-top:10px"></div></div></div>`;
+    <div class="fila" style="margin-top:12px"><button class="btn grande" id="kSave">Guardar</button></div><div id="kMsg" style="margin-top:10px"></div></div></div>`;
   $('#kSave').addEventListener('click', async () => {
     $('#kSave').disabled = true;
-    const cuerpo = { row: { codigo, momento, aplicador: K.aplicador, duracion_seg: dur, respuestas: resp, estado, escriba: K.escriba, ...(K.momento === 'Postest' ? { orden: K.orden } : {}), terminada_antes: K.terminada_antes, observaciones: $('#kObs').value.trim() } };
+    const cuerpo = { row: { codigo, momento, aplicador: K.aplicador, duracion_seg: dur, fecha_inicio: K.fecha_inicio, respuestas: resp, estado, ...(K.momento === 'Postest' ? { orden: K.orden } : {}), incompleta: false, observaciones: $('#kObs').value.trim() } };
     try { await api('registro', { method: 'PUT', body: cuerpo }); localStorage.removeItem('avance'); toast('Guardado'); cerrarKid(true); }
     catch (e) {
       if (e.status && e.status < 500) { $('#kMsg').innerHTML = `<div class="aviso mal">No se pudo guardar: ${esc(e.message)}.</div>`; $('#kSave').disabled = false; return; }
@@ -473,7 +504,6 @@ function renderFin() {
       toast('Sin conexión: la aplicación quedó guardada en este dispositivo y se enviará cuando vuelva la conexión'); cerrarKid(true);
     }
   });
-  $('#kDiscard').addEventListener('click', async () => { if (await dialogo({ titulo: 'Descartar aplicación', texto: 'Se descartan las respuestas de esta aplicación sin guardarlas.', ok: 'Descartar', peligro: true })) { localStorage.removeItem('avance'); cerrarKid(); } });
 }
 /* ---------- cola de envío sin conexión ---------- */
 const leerCola = () => { try { return JSON.parse(localStorage.getItem('colaEnvio') || '[]'); } catch { return []; } };
@@ -497,7 +527,7 @@ setInterval(() => { if (leerCola().length) enviarCola(); }, 60000);
 
 /* ---------- calificar ---------- */
 let calVista = 'lista', calRol = localStorage.getItem('calRol') || '1', calSel = null, calFiltro = localStorage.getItem('calFiltro') || 'pendientes', calPiloto = true;
-const nombreCal = (rol) => localStorage.getItem('calNombre' + rol) || '';
+const nombreCal = (rol) => sessionStorage.getItem('calNombre' + rol) || ''; // se recuerda solo mientras dure la sesión: no hay nombres por defecto
 function irCalificar(codigo, momento, e) { calSel = { codigo, momento }; calRol = e === 'completa' || e === 'doble' ? 'F' : (cal(codigo, momento)['1']?.completa ? '2' : '1'); localStorage.setItem('calRol', calRol); calVista = 'protocolo'; $('#ficha').classList.add('oculto'); origen = 'estudiantes'; ir('calificar'); }
 const protocolos = () => D.pc.slice().sort((a, b) => (a.protocolo || '').localeCompare(b.protocolo || '')); // orden por código de protocolo: mezcla grupos y momentos
 const nRub = (r) => RUBRICA.filter((it) => !r.estado?.[it.codigo]).length; // ítems de rúbrica que requieren puntuación humana (los omitidos valen 0 por regla; los faltantes no se puntúan)
@@ -520,7 +550,7 @@ function barraCal() {
 function activarBarraCal(onChange) {
   $('#cRol').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { calRol = b.dataset.m; localStorage.setItem('calRol', calRol); onChange(); }));
   $('#cFiltro').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { calFiltro = b.dataset.m; localStorage.setItem('calFiltro', calFiltro); onChange(); }));
-  $('#cNombre')?.addEventListener('input', () => localStorage.setItem('calNombre' + calRol, $('#cNombre').value.trim()));
+  $('#cNombre')?.addEventListener('input', () => sessionStorage.setItem('calNombre' + calRol, $('#cNombre').value.trim()));
   $('#cPiloto').addEventListener('change', () => { calPiloto = $('#cPiloto').checked; onChange(); });
 }
 function verListaCal() {
@@ -545,7 +575,7 @@ function verListaCal() {
 }
 // Respuesta del estudiante a un ítem, parte por parte, con la ayuda de la clave (uniones correctas, informaciones pertinentes).
 function respuestaHtml(r, it) {
-  const ayuda = it.puntuacion.ayuda, apl = (k) => (r.escriba?.[k] === 'aplicador' ? '<span class="apl">(escribió el aplicador)</span>' : '');
+  const ayuda = it.puntuacion.ayuda, apl = () => '';
   const partes = it.partes.map((p) => {
     const k = it.codigo + p.id, v = r.respuestas[k]; let h = `<div class="p"><span class="q">${esc(p.pregunta || p.etiqueta || (p.prefijo ? p.prefijo + '…' : ''))}</span>`;
     if (vacio(v)) return h + '<span class="nada">sin respuesta</span></div>';
@@ -584,7 +614,7 @@ function verProtocolo() {
     `<div class="cal-pie"><div class="campo" style="max-width:240px"><label for="cNombre2">Nombre del calificador ${rol}</label><input id="cNombre2" value="${esc(nombreCal(rol))}" placeholder="Nombre"></div><div class="campo"><label for="cObs">Observaciones (opcional)</label><input id="cObs" value="${esc(C?.observaciones || '')}"></div><button class="btn grande" id="cGuardar">Guardar calificación</button><div class="msg" id="cMsg"></div></div>`;
   pinta(); window.scrollTo(0, 0);
   $('#cVolver').addEventListener('click', verListaCal);
-  $('#cNombre2').addEventListener('input', () => localStorage.setItem('calNombre' + rol, $('#cNombre2').value.trim()));
+  $('#cNombre2').addEventListener('input', () => sessionStorage.setItem('calNombre' + rol, $('#cNombre2').value.trim()));
   $('#calCuerpo').querySelectorAll('[data-pt]').forEach((b) => b.addEventListener('click', () => { puntos[b.dataset.pt] = Number(b.dataset.v); b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b)); pinta(); }));
   $('#cGuardar').addEventListener('click', async () => {
     const nombre = $('#cNombre2').value.trim(); if (!nombre) return ($('#cMsg').innerHTML = '<div class="aviso mal" style="margin:0">Escriba el nombre del calificador.</div>');

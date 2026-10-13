@@ -30,12 +30,11 @@ async def main():
         async def avanzar():
             await pg.click("#kNext"); await pg.wait_for_timeout(60)
             if await dialogo_abierto(): await pg.click("#dOk"); await pg.wait_for_timeout(60)
-        async def aplicar_hasta_el_final(omitir=(), sin_oportunidad=(), terminar_en=None):
+        async def aplicar_hasta_el_final(omitir=(), sin_oportunidad=()):
             while True:
                 s = await pantalla()
                 if s is None or s["tipo"] == "fin": break
                 if s["tipo"] == "item":
-                    if terminar_en and s["it"] == terminar_en: await pg.click("#kFin"); await confirmar(); break
                     if s["it"] in omitir: await pg.click("#kSinResp"); await confirmar()
                     elif s["it"] in sin_oportunidad: await pg.click("#kSinResp"); await confirmar(boton="#dOtro")
                     else: await responder_item()
@@ -69,7 +68,9 @@ async def main():
         print("etapa situación 1:", await pantalla()); await avanzar()
         s = await pantalla(); print("ítem 1:", s, "| siguiente deshabilitado sin respuesta:", await pg.is_disabled("#kNext"))
         await pg.keyboard.press("1"); print("tecla 1 marca A:", await pg.evaluate("document.querySelector('.opt.sel .letra').textContent")); await pg.screenshot(path="test/w5_kid_item1.png")
-        await avanzar(); await responder_item("porque hay poco espacio para caminar"); await pg.screenshot(path="test/w6_kid_item2.png"); await avanzar()
+        await avanzar(); await pg.click(".opts button:nth-child(1)"); await pg.click(".opts button:nth-child(3)"); print("ítem 2 con marcas y sin explicación: siguiente deshabilitado:", await pg.is_disabled("#kNext"))
+        if not await pg.is_disabled("#kNext"): errs.append("se puede avanzar con una parte sin responder")
+        await pg.fill("textarea", "porque hay poco espacio para caminar"); await pg.wait_for_timeout(80); print("con todo respondido, habilitado:", not await pg.is_disabled("#kNext")); await pg.screenshot(path="test/w6_kid_item2.png"); await avanzar()
         await responder_item(); await pg.click("#kBack"); await pg.wait_for_timeout(100); print("atrás dentro de la misma hoja vuelve al ítem 2:", (await pantalla())["it"] == "I02"); await avanzar(); await avanzar()
         print("ítem 4:", (await pantalla())["it"]); await pg.click("#kSinResp"); await pg.wait_for_selector("#dialogo:not(.oculto)"); print("diálogo con tres botones:", await pg.text_content("#dOk"), "/", await pg.text_content("#dOtro")); await pg.click("#dOk"); await pg.wait_for_timeout(100)
         print("ítem 4 omitido:", await pg.text_content("#kBody .num .om"), "| siguiente habilitado:", not await pg.is_disabled("#kNext")); await avanzar()
@@ -91,30 +92,36 @@ async def main():
         ok_orden = sorted(orden) == fijo and orden[:4] != fijo[:4] and set(orden[:4]) == set(fijo[:4]) and set(orden[4:]) == set(fijo[4:])
         print("orden del postest:", orden, "| permutación por bloques distinta del pretest:", ok_orden)
         if not ok_orden: errs.append("el postest no baraja las situaciones por bloques")
-        for _ in range(3): await avanzar()
+        await avanzar(); await responder_item(); await avanzar(); await responder_item(); await avanzar()
         s = await pantalla(); primera = await pg.evaluate("K.seq[K.i].sit.id"); print("primera situación presentada:", primera, "=", orden[0], "| contador por posición:", await pg.text_content("#kCount"))
         await avanzar(); print("primera pregunta en pantalla:", await pg.text_content("#kCount"), "| ítem:", (await pantalla())["it"])
         await responder_item(); await avanzar(); await pg.click("#kExit"); await confirmar(); await pg.wait_for_selector("#aAvance:not(.oculto)")
         await pg.reload(); await pg.wait_for_selector("#app:not(.oculto)"); await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_selector("#aAvance:not(.oculto)"); await pg.click("#btnContinuar"); await pg.wait_for_selector("#kid:not(.oculto)")
         print("retoma con el mismo orden:", await pg.evaluate("K.orden") == orden)
         if await pg.evaluate("K.orden") != orden: errs.append("al retomar cambió el orden del postest")
-        await pg.evaluate("K.i = K.seq.findIndex(x => x.tipo === 'pausa'); renderKid()"); await pg.wait_for_timeout(100); print("pausa nombra las dos historias del segundo bloque:", (await pg.text_content("#kBody .caja p.centro")).strip()[:90])
-        await aplicar_hasta_el_final(terminar_en="A05" if orden[4] == "S5" else "A06"); await pg.click("#kSave"); await pg.wait_for_timeout(1500)
+        await pg.evaluate("K.i = K.seq.findIndex(x => x.tipo === 'pausa'); renderKid()"); await pg.wait_for_timeout(100); print("pausa nombra las dos historias del segundo bloque:", (await pg.text_content("#kBody .caja p")).strip()[:90])
+        await responder_item(); await avanzar(); await pg.wait_for_timeout(600); await pg.click("#kExit"); await confirmar(); await pg.wait_for_timeout(800); await pg.evaluate("localStorage.removeItem('avance')")
         d = await datos(); rp = next(x for x in d["pc"] if x["codigo"] == "E05"); rpre = next(x for x in d["pc"] if x["codigo"] == "E03")
-        print("orden guardado en el postest:", rp.get("orden") == orden, "| el pretest no lleva orden:", "orden" not in rpre)
+        print("orden guardado en el postest (incompleto):", rp.get("orden") == orden, rp.get("incompleta"), "| el pretest no lleva orden:", "orden" not in rpre)
         if rp.get("orden") != orden or "orden" in rpre: errs.append("el orden del postest no quedó guardado como se presentó")
-        # --- aplicación interrumpida: se retoma donde iba y luego "Terminar aquí" deja faltantes
+        # --- aplicación interrumpida: las respuestas se guardan tras cada pregunta; al salir queda incompleta y se continúa después (también desde el servidor)
         await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E02"); await pg.click("#aMom button[data-m=Pretest]"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
-        for _ in range(4): await avanzar()  # instrucciones, práctica (sin responder), portada
+        print("sin Terminar aquí:", await pg.query_selector("#kFin") is None)
+        await avanzar(); await responder_item(); await avanzar(); await responder_item(); await avanzar(); await avanzar()  # instrucciones, práctica (se responde), portada
         for _ in range(3): await responder_item(); await avanzar()
+        await pg.wait_for_timeout(700); r = next((x for x in (await datos())["pc"] if x["codigo"] == "E02"), None)
+        print("guardado parcial tras 3 preguntas:", r is not None and r.get("incompleta"), "| pendientes:", len(r["pendientes"]) if r else None, "| quedó en:", r.get("interrumpida_en") if r else None)
+        if not r or not r.get("incompleta") or r.get("interrumpida_en") != "I04": errs.append("no se guarda la aplicación parcial tras cada pregunta")
         await pg.click("#kExit"); await confirmar(); await pg.wait_for_selector("#aAvance:not(.oculto)"); print("aviso de avance:", (await pg.text_content("#aAvance")).strip()[:80])
-        await pg.reload(); await pg.wait_for_selector("#app:not(.oculto)"); await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_selector("#aAvance:not(.oculto)"); await pg.click("#btnContinuar"); await pg.wait_for_selector("#kid:not(.oculto)")
-        print("retoma en:", await pantalla())
-        await aplicar_hasta_el_final(terminar_en="I09")
-        print("terminada antes:", (await pg.text_content("#kBody .res")).strip()[:140]); await pg.click("#kSave"); await pg.wait_for_timeout(1500)
-        r = next(x for x in (await datos())["pc"] if x["codigo"] == "E02")
-        print("E02 faltantes:", [k for k, v in r["estado"].items() if v == "faltante"][:5], "… terminada_antes:", r["terminada_antes"])
-        if not r["terminada_antes"] or r["estado"].get("I09") != "faltante" or r["estado"].get("I20") != "faltante" or "I08" in r["auto"] and r["auto"]["I08"] is None: errs.append("Terminar aquí no dejó los ítems restantes como faltantes")
+        await pg.evaluate("localStorage.removeItem('avance')"); await pg.reload(); await pg.wait_for_selector("#app:not(.oculto)")  # sin avance local: se continúa desde el servidor
+        await pg.click("nav.menu button[data-v=estudiantes]"); await pg.wait_for_timeout(300); await pg.click("#tablaP .gtabs button[data-g=Experimental]"); await pg.wait_for_timeout(200); print("marca de aplicación incompleta:", (await pg.text_content("#tablaP [data-apl=E02][data-m=Pretest]")).strip())
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E02"); await pg.click("#aMom button[data-m=Pretest]"); await pg.click("#btnStart"); await pg.wait_for_selector("#dialogo:not(.oculto)")
+        print("diálogo:", await pg.text_content("#dTitulo"), "|", await pg.text_content("#dOk"), "/", await pg.text_content("#dOtro")); await pg.click("#dOk"); await pg.wait_for_selector("#kid:not(.oculto)")
+        s = await pantalla(); print("retoma desde el servidor en:", s, "| respuestas conservadas:", await pg.evaluate("Object.keys(K.resp).length"))
+        if s["it"] != "I04" or await pg.evaluate("Object.keys(K.resp).length") < 3: errs.append("no retomó la aplicación incompleta desde el servidor")
+        await aplicar_hasta_el_final(); await pg.click("#kSave"); await pg.wait_for_timeout(1500)
+        r = next(x for x in (await datos())["pc"] if x["codigo"] == "E02"); print("E02 completada:", not r.get("incompleta"), "| faltantes:", [k for k, v in r["estado"].items() if v == "faltante"])
+        if r.get("incompleta") or [k for k, v in r["estado"].items() if v == "faltante"]: errs.append("la aplicación continuada no quedó completa")
         # --- sin conexión al guardar: queda en cola y se envía al volver la conexión
         await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E04"); await pg.click("#aMom button[data-m=Pretest]"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
         await aplicar_hasta_el_final()
@@ -194,7 +201,7 @@ async def main():
         wb = openpyxl.load_workbook("test/descarga.xlsx")
         for ws in wb: print("  hoja", ws.title, ws.max_row - 1, "filas,", ws.max_column, "columnas:", [c.value for c in ws[1]][:10], "...", [c.value for c in ws[1]][-3:], "| momentos:", [r[4] for r in ws.iter_rows(min_row=2, values_only=True)][:4])
         enc = [c.value for c in wb["Experimental"][1]]
-        esperadas = ["Grupo", "Codigo", "Nombre", "Apellido", "Momento", "Sexo", "Edad", "Protocolo", "OrdenSituaciones", "Indagacion", "Justificacion", "Perspectivas", "Conclusiones", "Revision", "TotalPC", "P01", "P20", "Omitidos", "Faltantes", "R01", "R02a", "R02b", "R06a_Luciana", "R06a_Samuel", "EI5a", "R17a", "R17_fin", "R20b", "EscribeAplicador"]
+        esperadas = ["Grupo", "Codigo", "Nombre", "Apellido", "Momento", "Sexo", "Edad", "Protocolo", "OrdenSituaciones", "Indagacion", "Justificacion", "Perspectivas", "Conclusiones", "Revision", "TotalPC", "P01", "P20", "Omitidos", "Faltantes", "R01", "R02a", "R02b", "R06a_Luciana", "R06a_Samuel", "EI5a", "R17a", "R17_fin", "R20b", "Incompleta"]
         falt = [x for x in esperadas if x not in enc]; print("columnas esperadas presentes:", not falt, falt)
         if falt: errs.append("faltan columnas en el Excel: " + ", ".join(falt))
         async with pg.expect_download() as dl: await pg.click("#btnCopia")

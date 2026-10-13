@@ -83,10 +83,10 @@ function normalizarRespuestas(r) {
 const respondido = (it, resp) => it.partes.some((p) => !vacio(resp[it.codigo + p.id]));
 // Estado de cada ítem: "omitido" (tuvo oportunidad y no respondió: 0 puntos) o "faltante" (sin oportunidad: dato faltante).
 // Un ítem sin respuesta y sin estado queda como omitido. El ítem 8 sin la elección del 5 queda faltante (regla de la guía).
-function normalizarEstado(e, resp) {
+function normalizarEstado(e, resp, pendientes = []) {
   const out = {}; e = e && typeof e === "object" ? e : {};
   for (const it of ITEMS) {
-    if (e[it.codigo] === "faltante") out[it.codigo] = "faltante";
+    if (e[it.codigo] === "faltante" || pendientes.includes(it.codigo)) out[it.codigo] = "faltante"; // los pendientes de una aplicación incompleta no se alcanzaron: dato faltante
     else if (e[it.codigo] === "omitido" || !respondido(it, resp)) out[it.codigo] = "omitido";
   }
   for (const it of PUNTUABLES) if (it.puntuacion.tipo === "clave_condicional") {
@@ -229,17 +229,23 @@ export default async (req) => {
     const r = body.row || {}, codigo = String(r.codigo || "").toUpperCase(), momento = r.momento;
     if (!MOMENTOS.includes(momento)) return json({ error: "Momento inválido" }, 400);
     if (!(await store("participantes").get(codigo, { type: "json" }))) return json({ error: "Estudiante no registrado" }, 404);
-    const respuestas = normalizarRespuestas(r.respuestas), estado = normalizarEstado(r.estado, respuestas), escriba = normalizarEscriba(r.escriba);
+    // Aplicación incompleta (el aplicador salió o se cerró el navegador): se guarda lo respondido; los ítems no alcanzados ("pendientes")
+    // quedan como dato faltante, y la aplicación se puede continuar después desde donde quedó (interrumpida_en).
+    const incompleta = r.incompleta === true, codigos = ITEMS.map((it) => it.codigo);
+    const pendientes = incompleta && Array.isArray(r.pendientes) ? r.pendientes.filter((c) => codigos.includes(c)) : [];
+    const respuestas = normalizarRespuestas(r.respuestas), estado = normalizarEstado(r.estado, respuestas, pendientes), escriba = normalizarEscriba(r.escriba);
     const nResp = ITEMS.filter((it) => respondido(it, respuestas)).length;
     if (!nResp && !Object.values(estado).includes("faltante")) return json({ error: "La aplicación no tiene ninguna respuesta" }, 400);
-    const row = { codigo, momento, fecha: hoy(), fecha_hora: ahora(), aplicador: String(r.aplicador || "").slice(0, 80), duracion_seg: Number(r.duracion_seg) || 0, protocolo: await protocoloDe(secreto, codigo, momento),
-      respuestas, estado, escriba, auto: autoPuntajes(respuestas, estado), ...(ordenValido(r.orden) ? { orden: r.orden } : {}), terminada_antes: !!r.terminada_antes, observaciones: String(r.observaciones || "").slice(0, 800) };
+    const row = { codigo, momento, fecha: r.fecha_inicio || hoy(), fecha_hora: ahora(), aplicador: String(r.aplicador || "").slice(0, 80), duracion_seg: Number(r.duracion_seg) || 0, protocolo: await protocoloDe(secreto, codigo, momento),
+      respuestas, estado, escriba, auto: autoPuntajes(respuestas, estado), ...(ordenValido(r.orden) ? { orden: r.orden } : {}),
+      ...(incompleta ? { incompleta: true, pendientes, interrumpida_en: codigos.includes(r.interrumpida_en) ? r.interrumpida_en : pendientes[0] || "" } : {}), observaciones: String(r.observaciones || "").slice(0, 800) };
     const k = llave(codigo, momento);
     const previo = await store("pc").get(k, { type: "json" });
     await store("pc").setJSON(k, row);
     let borradas = 0;
     if (previo) for (const rol of ROLES) { if (await store("calif").get(llaveC(codigo, momento, rol), { type: "json" })) { await store("calif").delete(llaveC(codigo, momento, rol)); borradas++; } } // una nueva aplicación invalida las calificaciones de la anterior
-    await bitacora(previo ? "sobrescritura" : "aplicacion", `${PC.nombre} ${codigo} ${momento} (${row.protocolo})${borradas ? `; se descartaron ${borradas} calificación(es) de la aplicación anterior` : ""}`);
+    const continua = previo && previo.incompleta; // guardado parcial sucesivo o continuación: un solo evento al terminar
+    if (!continua || !incompleta) await bitacora(previo && !continua ? "sobrescritura" : "aplicacion", `${PC.nombre} ${codigo} ${momento} (${row.protocolo})${incompleta ? ` incompleta, quedó en ${row.interrumpida_en}` : continua ? " completada" : ""}${borradas ? `; se descartaron ${borradas} calificación(es) de la aplicación anterior` : ""}`);
     return json({ ok: true, row, calificaciones_borradas: borradas });
   }
   if (ruta === "registro" && req.method === "DELETE") {

@@ -28,11 +28,11 @@ const PLAN = [
 const ESPECIAL = {
   'E04-Pretest': { omitidos: ['I04'] },
   'E07-Postest': { omitidos: ['I10', 'I18'] },
-  'E05-Pretest': { terminada: 'S5' },         // se interrumpió antes de la situación 5: elecciones iniciales e ítems 17-20 faltantes
+  'E05-Pretest': { interrumpida: 'S5' },      // quedó incompleta antes de la situación 5: elecciones iniciales e ítems 17-20 pendientes (dato faltante)
   'E11-Pretest': { omitidos: ['I05'] },        // sin elección en el 5, el ítem 8 queda como dato faltante
   'E13-Pretest': { omitidos: ['A05'] },        // sin elección inicial: el 17 y el 18 se responden igual
 };
-const CALIFICADORES = { 1: 'Johanna Álvarez', 2: 'Calificadora de apoyo' };
+const CALIFICADORES = { 1: 'Calificador 1 (prueba)', 2: 'Calificador 2 (prueba)' };
 const NIVEL = { alto: 0.85, medio: 0.6, bajo: 0.35 }; // probabilidad de acierto en los cerrados y de calidad alta en los abiertos
 
 // Banco de respuestas abiertas por parte y nivel de calidad (2, 1, 0), con el estilo de un niño de tercero
@@ -65,7 +65,7 @@ const otra = (opciones, clave) => al(opciones.map((o) => o.v).filter((v) => v !=
 
 // Respuestas de una aplicación completa; devuelve también la calidad "verdadera" de cada ítem de rúbrica (para los calificadores)
 function aplicacion(INS, nivel, ajuste, esp = {}) {
-  const PC = INS.PC, ITEM = Object.fromEntries(PC.items.map((i) => [i.codigo, i])), resp = {}, q = {}, estado = {}, escriba = {};
+  const PC = INS.PC, ITEM = Object.fromEntries(PC.items.map((i) => [i.codigo, i])), resp = {}, q = {}, estado = {};
   const parte = (c, id) => ITEM[c].partes.find((p) => p.id === id);
   const unico = (c, clave) => (resp[c + 'a'] = acierta(nivel, ajuste) ? clave : otra(parte(c, 'a').opciones, clave));
   // situación 1
@@ -99,13 +99,11 @@ function aplicacion(INS, nivel, ajuste, esp = {}) {
   q.I19 = calidad(nivel, ajuste); resp.I19a = al(['mantengo', 'ajusto', 'cambio']);
   const fin6 = resp.I19a === 'cambio' ? { armada: 'partes', partes: 'armada' }[resp.A06a] : resp.A06a; resp.I19b = texto('I19b', q.I19, fin6);
   q.I20 = calidad(nivel, ajuste); resp.I20a = texto('I20a', q.I20); resp.I20b = texto('I20b', q.I20);
-  // apoyo de escritura: los de nivel bajo dictan algunas respuestas al aplicador
-  if (nivel === 'bajo') for (const k of ['I10a', 'I15a', 'I17b', 'I20b']) if (Math.random() < 0.6) escriba[k] = 'aplicador';
-  // casos especiales: omisiones e interrupción
+  // casos especiales: omisiones e interrupción (aplicación incompleta: los ítems no alcanzados quedan pendientes)
   for (const c of esp.omitidos || []) { estado[c] = 'omitido'; for (const p of ITEM[c].partes) delete resp[c + p.id]; delete q[c]; }
-  let terminada_antes = false;
-  if (esp.terminada) { let corta = false; for (const s of PC.situaciones) { if (s.id === esp.terminada) corta = true; if (corta) for (const et of s.etapas) for (const c of et.items) { estado[c] = 'faltante'; for (const p of ITEM[c].partes) delete resp[c + p.id]; delete q[c]; } } terminada_antes = true; }
-  return { resp, q, estado, escriba, terminada_antes };
+  const pendientes = [];
+  if (esp.interrumpida) { let corta = false; for (const s of PC.situaciones) { if (s.id === esp.interrumpida) corta = true; if (corta) for (const et of s.etapas) for (const c of et.items) { pendientes.push(c); for (const p of ITEM[c].partes) delete resp[c + p.id]; delete q[c]; } } }
+  return { resp, q, estado, pendientes };
 }
 const barajar = (l) => l.slice().sort(() => Math.random() - 0.5);
 function ordenPostest(INS) { const fijo = INS.PC.bloques.map((b) => b.situaciones); let out; do { out = fijo.map(barajar); } while (out[0].join() === fijo[0].join()); return out.flat(); }
@@ -151,8 +149,9 @@ async function semilla({ base = '', clave, INS, log = console.log, reiniciar = f
         const ajuste = m === 'Postest' ? (grupo === 'Experimental' ? 0.18 : (Math.random() - 0.5) * 0.08) : 0;
         const a = aplicacion(INS, nivel, ajuste, ESPECIAL[`${codigo}-${m}`]); q = a.q;
         const orden = m === 'Postest' ? ordenPostest(INS) : undefined; // en el postest la app baraja las situaciones por bloques y guarda el orden
-        await api('registro', { method: 'PUT', body: { row: { codigo, momento: m, aplicador: 'Johanna Álvarez', duracion_seg: 1500 + Math.floor(Math.random() * 900), respuestas: a.resp, estado: a.estado, escriba: a.escriba, orden, terminada_antes: a.terminada_antes, observaciones: a.terminada_antes ? 'Se interrumpió por una actividad del colegio; no se pudo retomar.' : '' } } });
-        n++; log(`${codigo} ${m}${a.terminada_antes ? ' (interrumpida)' : ''}${Object.keys(a.estado).length ? ' · ' + Object.entries(a.estado).map(([k, v]) => k + ' ' + v).join(', ') : ''}`);
+        const inc = a.pendientes.length ? { incompleta: true, pendientes: a.pendientes, interrumpida_en: a.pendientes[0] } : {};
+        await api('registro', { method: 'PUT', body: { row: { codigo, momento: m, aplicador: 'Johanna Álvarez', duracion_seg: 1500 + Math.floor(Math.random() * 900), respuestas: a.resp, estado: a.estado, orden, ...inc, observaciones: a.pendientes.length ? 'Se interrumpió por una actividad del colegio.' : '' } } });
+        n++; log(`${codigo} ${m}${a.pendientes.length ? ' (incompleta)' : ''}${Object.keys(a.estado).length ? ' · ' + Object.entries(a.estado).map(([k, v]) => k + ' ' + v).join(', ') : ''}`);
       } else if (roles) { // calidad de referencia para calificar una aplicación ya guardada: nivel del estudiante
         q = {}; for (const it of INS.PC.items) if (it.puntuacion.tipo === 'rubrica') q[it.codigo] = calidad(nivel, 0);
       }

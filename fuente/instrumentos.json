@@ -12,7 +12,7 @@
     "instrucciones": "Escucha con atención la lectura de cada situación y sigue el texto en la pantalla. Después responde las preguntas de manera individual. En algunas deberás marcar una opción, relacionar información, completar una idea o escribir una respuesta corta. Cuando se te pida explicar, escribe la razón que mejor muestre lo que piensas. Si necesitas que vuelvan a leer una pregunta, puedes pedirlo. Trata de responder todas las preguntas.",
     "guion": {
       "diga": "Te voy a leer unas historias de la escuela y después unas preguntas. En algunas marcas una opción y en otras escribes una respuesta corta. Importan tus ideas y tus razones, no la letra bonita ni la ortografía. Si quieres que te lea algo otra vez, me lo pides. Esto no cambia tus notas. Primero vamos a practicar.",
-      "haga": "Lea la situación y cada pregunta en voz alta, literalmente. No explique qué respuesta conviene ni proponga razones. Si el niño no puede escribir, escriba usted exactamente lo que él dice (sin reformular) y marque «Lo escribe el aplicador». Si no quiere responder, use «Sin respuesta» y elija «Omitió»; si no pudo responder por una interrupción, elija «Sin oportunidad». Al pasar a una nueva hoja, las respuestas anteriores quedan cerradas: léalo así al niño.",
+      "haga": "Lea la situación y cada pregunta en voz alta, literalmente. No explique qué respuesta conviene ni proponga razones. Si el niño no puede escribir, escriba usted exactamente lo que él dice, sin reformular. Si no quiere responder, use «Sin respuesta» y elija «Omitió»; si no pudo responder por una interrupción, elija «Sin oportunidad». Al pasar a una nueva hoja, las respuestas anteriores quedan cerradas: léalo así al niño.",
       "etapas": "La prueba va por hojas, como el cuadernillo de papel: en la cartelera, los cuadernos y el rincón de lectura hay una segunda parte cuyas opciones podrían sugerir respuestas de la primera; en el juego y la maqueta, la elección inicial se cierra antes de mostrar la información nueva. Por eso no se puede volver a una hoja anterior. En el postest las situaciones salen en otro orden (distinto para cada estudiante), para que no repita de memoria el pretest."
     },
     "habilidades": [
@@ -121,7 +121,14 @@
             }
           ]
         }
-      ]
+      ],
+      "tema": {
+        "color": "#3B9DF2",
+        "suave": "#E6F2FD",
+        "oscuro": "#1F6FC2",
+        "fondo": "#EEF6FE"
+      },
+      "imagen": "assets/situaciones/practica.svg"
     },
     "situaciones": [
       {
@@ -139,7 +146,14 @@
               "I04"
             ]
           }
-        ]
+        ],
+        "tema": {
+          "color": "#FF7A59",
+          "suave": "#FFEDE7",
+          "oscuro": "#D1502F",
+          "fondo": "#FFF5F1"
+        },
+        "imagen": "assets/situaciones/S1.svg"
       },
       {
         "id": "S2",
@@ -173,7 +187,14 @@
               "I08"
             ]
           }
-        ]
+        ],
+        "tema": {
+          "color": "#8E5BE8",
+          "suave": "#F0E9FD",
+          "oscuro": "#6A3AC2",
+          "fondo": "#F7F3FE"
+        },
+        "imagen": "assets/situaciones/S2.svg"
       },
       {
         "id": "S3",
@@ -196,7 +217,14 @@
               "I12"
             ]
           }
-        ]
+        ],
+        "tema": {
+          "color": "#1BA8A0",
+          "suave": "#E3F6F4",
+          "oscuro": "#137E78",
+          "fondo": "#EFF9F8"
+        },
+        "imagen": "assets/situaciones/S3.svg"
       },
       {
         "id": "S4",
@@ -224,7 +252,14 @@
               "I16"
             ]
           }
-        ]
+        ],
+        "tema": {
+          "color": "#3DB561",
+          "suave": "#E6F6EA",
+          "oscuro": "#2A8A47",
+          "fondo": "#F0FAF2"
+        },
+        "imagen": "assets/situaciones/S4.svg"
       },
       {
         "id": "S5",
@@ -259,7 +294,14 @@
               "I18"
             ]
           }
-        ]
+        ],
+        "tema": {
+          "color": "#F5A623",
+          "suave": "#FFF2DB",
+          "oscuro": "#C47E0A",
+          "fondo": "#FFF8EC"
+        },
+        "imagen": "assets/situaciones/S5.svg"
       },
       {
         "id": "S6",
@@ -294,7 +336,14 @@
               "I20"
             ]
           }
-        ]
+        ],
+        "tema": {
+          "color": "#E84C8B",
+          "suave": "#FDE7F0",
+          "oscuro": "#B82D67",
+          "fondo": "#FEF2F7"
+        },
+        "imagen": "assets/situaciones/S6.svg"
       }
     ],
     "bloques": [
@@ -1349,7 +1398,8 @@
       "faltante": "La ausencia, la interrupción o la falta de oportunidad de responder se registran como dato faltante; no se convierten en 0.",
       "sumas": "Cada habilidad suma sus cuatro ítems (0-8) y el total los veinte (0-40). Si falta un ítem por ausencia de oportunidad, no se calcula la suma correspondiente ni se reemplaza por el promedio.",
       "calificacion": "Los ocho ítems cerrados se califican solos con la clave. Los doce ítems de rúbrica los puntúan de forma independiente dos calificadores (0, 1 o 2), sin ver nombre, grupo ni momento; la puntuación final es la acordada entre ambos.",
-      "orden": "En el pretest las situaciones van en el orden del cuadernillo (1 a 6). En el postest se presentan en un orden al azar distinto para cada estudiante, por bloques (1-4 entre sí y 5-6 entre sí, con la pausa entre ambos), conservando el orden interno de cada situación; el orden presentado queda registrado."
+      "orden": "En el pretest las situaciones van en el orden del cuadernillo (1 a 6). En el postest se presentan en un orden al azar distinto para cada estudiante, por bloques (1-4 entre sí y 5-6 entre sí, con la pausa entre ambos), conservando el orden interno de cada situación; el orden presentado queda registrado.",
+      "respuesta_obligatoria": "La app no permite avanzar hasta que todas las partes del ítem estén respondidas (en «marca las dos», al menos dos marcas; en las uniones, las dos filas; en los textos, algo escrito). La única excepción es que el aplicador registre el ítem como «Sin respuesta»: omitió (0 puntos) o sin oportunidad (dato faltante)."
     }
   }
 }

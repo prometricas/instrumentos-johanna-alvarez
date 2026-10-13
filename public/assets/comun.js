@@ -101,6 +101,7 @@ const FIJAS = [['grupo', 'Grupo'], ['codigo', 'Codigo'], ['nombre', 'Nombre'], [
 function columnasRespuestas(op = {}) {
   const cols = [], c = (bloque, id, texto, valor, tipo = bloque) => cols.push({ bloque, id, texto, valor, tipo });
   c('meta', 'Protocolo', 'Código de protocolo con el que se calificó la aplicación', (r) => r.protocolo || '');
+  c('meta', 'Incompleta', 'Sí cuando la aplicación quedó incompleta (los ítems no alcanzados son dato faltante)', (r) => (r.incompleta ? 'Sí' : ''));
   c('meta', 'OrdenSituaciones', 'Orden en que se presentaron las situaciones (en el postest se barajan por bloques); vacío = orden del cuadernillo', (r) => (r.orden ? ordenNums(r).replace(/, /g, ',') : ''));
   if (op.meta) {
     c('meta', 'FechaHora', 'Fecha y hora de la aplicación', (r) => r.fecha_hora || r.fecha || '');
@@ -128,7 +129,6 @@ function columnasRespuestas(op = {}) {
         if (it.final && p.id === it.final.parte) c('resp', it.final.col, `${numItem(it)} · elección final (inicial mantenida o cambiada)`, (r) => eleccionFinal(r, it) ?? '');
       }
     }
-    c('resp', 'EscribeAplicador', 'Ítems cuya respuesta abierta escribió el aplicador al dictado del estudiante', (r) => [...new Set(Object.keys(r.escriba || {}).map((k) => ITEM[k.slice(0, 3)]).filter(Boolean).map((it) => it.num || it.etiqueta))].join(', '));
   }
   return cols;
 }
