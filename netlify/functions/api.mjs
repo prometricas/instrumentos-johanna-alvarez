@@ -145,6 +145,12 @@ export default async (req) => {
     const bit = await leerTodo("bitacora"); bit.sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora));
     return json({ bitacora: bit });
   }
+  if (ruta === "bitacora" && req.method === "DELETE") { // vaciar la bitácora (p. ej. antes del trabajo de campo real); queda un único evento que lo registra
+    const st = store("bitacora"), { blobs } = await st.list();
+    for (const b of blobs) await st.delete(b.key);
+    await bitacora("bitacora_vaciada", `Se borraron ${blobs.length} eventos anteriores`);
+    return json({ ok: true, borrados: blobs.length });
+  }
   if (ruta === "copia" && req.method === "GET") { // copia de seguridad completa
     const [participantes, pc, calif, papelera, bit] = await Promise.all([...STORES, "papelera", "bitacora"].map(leerTodo));
     bit.sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora));
