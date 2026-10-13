@@ -1,0 +1,16 @@
+{
+  "name": "instrumentos-tesis-alvarez",
+  "version": "1.0.0",
+  "description": "App web de la prueba de desempeño de pensamiento crítico (tesis doctoral J. P. Álvarez Pulgarín, Universidad Cuauhtémoc)",
+  "scripts": {
+    "dev": "node dev-local.mjs",
+    "build": "python3 build.py"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@netlify/blobs": "^11.1.4"
+  },
+  "private": true
+}

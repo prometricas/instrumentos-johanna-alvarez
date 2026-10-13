@@ -1,0 +1,193 @@
+import asyncio, random, sys, json, os, openpyxl
+from playwright.async_api import async_playwright
+U = "http://localhost:8888"
+CLAVE = open("../.env").read().split("APP_CLAVE=")[1].strip() if os.path.exists("../.env") else open(".env").read().split("APP_CLAVE=")[1].strip()
+errs = []
+ALUMNOS = [("Débora", "Plata", "Piloto", "Femenino", 7), ("Aquiles", "Estudio", "Experimental", "Masculino", 8), ("Elsa", "Pato", "Experimental", "Femenino", 8),
+           ("Elena", "Nito", "Control", "Femenino", 7), ("Alan", "Brito", "Control", "Masculino", 8)]
+async def main():
+    async with async_playwright() as p:
+        b = await p.chromium.launch()
+        ctx = await b.new_context(viewport={"width": 1920, "height": 1000}, permissions=["clipboard-read", "clipboard-write"])
+        pg = await ctx.new_page(); pg.on("pageerror", lambda e: errs.append("admin: " + str(e)))
+        pg.on("dialog", lambda d: errs.append("diálogo nativo inesperado: " + d.message))
+        async def dialogo_abierto(): return not await pg.evaluate("document.querySelector('#dialogo').classList.contains('oculto')")
+        async def confirmar(texto=None, boton="#dOk"):  # responde el diálogo propio de la app
+            await pg.wait_for_selector("#dialogo:not(.oculto)")
+            if texto: await pg.fill("#dInput", texto)
+            await pg.click(boton); await pg.wait_for_selector("#dialogo.oculto", state="attached")
+        async def datos(): return await pg.evaluate("async () => (await fetch('/api/datos', { headers: { 'x-clave': sessionStorage.getItem('clave') } })).json()")
+        async def pantalla(): return await pg.evaluate("K ? { tipo: K.seq[K.i].tipo, it: K.seq[K.i].it ? K.seq[K.i].it.codigo : null, prac: !!K.seq[K.i].prac, g: K.seq[K.i].g } : null")
+        async def responder_item(texto="respuesta de prueba"):
+            for parte in await pg.query_selector_all("#kBody .k-parte"):
+                multi = await parte.query_selector_all("[data-multi]")
+                if multi: await multi[0].click(); await multi[2].click(); continue
+                for fila in await parte.query_selector_all(".fila-u"): await (await fila.query_selector(".letras button")).click()
+                opt = await parte.query_selector(".opts button:not([disabled])")
+                if opt: await opt.click()
+                ta = await parte.query_selector("textarea")
+                if ta: await ta.fill(texto)
+        async def avanzar():
+            await pg.click("#kNext"); await pg.wait_for_timeout(60)
+            if await dialogo_abierto(): await pg.click("#dOk"); await pg.wait_for_timeout(60)
+        async def aplicar_hasta_el_final(omitir=(), sin_oportunidad=(), terminar_en=None):
+            while True:
+                s = await pantalla()
+                if s is None or s["tipo"] == "fin": break
+                if s["tipo"] == "item":
+                    if terminar_en and s["it"] == terminar_en: await pg.click("#kFin"); await confirmar(); break
+                    if s["it"] in omitir: await pg.click("#kSinResp"); await confirmar()
+                    elif s["it"] in sin_oportunidad: await pg.click("#kSinResp"); await confirmar(boton="#dOtro")
+                    else: await responder_item()
+                await avanzar()
+            await pg.wait_for_selector("#kSave")
+        await pg.goto(U)
+        await pg.fill("#clave", "mala"); await pg.click("#btnEntrar"); await pg.wait_for_selector("#entradaMsg .aviso"); print("clave mala (con espera de 1,5 s):", await pg.text_content("#entradaMsg"))
+        await pg.fill("#clave", CLAVE); await pg.click("#btnEntrar"); await pg.wait_for_selector("#app:not(.oculto)"); await pg.wait_for_timeout(300)
+        print("vacio:", (await pg.text_content("#tablaP")).strip()[:60])
+        await pg.fill("#pNombre", "Paco"); await pg.click("#btnAddP"); await pg.wait_for_timeout(300)
+        print("faltan campos:", await pg.text_content("#pMsg"), "| resaltados:", len(await pg.query_selector_all("#v-estudiantes .campo.falta")))
+        await pg.fill("#pNombre", "")
+        for n, a, g, sx, ed in ALUMNOS:
+            await pg.fill("#pNombre", n); await pg.fill("#pApellido", a); await pg.select_option("#pGrupo", g); await pg.select_option("#pSexo", sx); await pg.fill("#pEdad", str(ed))
+            await pg.click("#btnAddP"); await pg.wait_for_timeout(900)
+        print("add:", await pg.text_content("#pMsg"), "| pestañas:", [await g.text_content() for g in await pg.query_selector_all("#tablaP .gtabs button")])
+        await pg.click("#tablaP .gtabs button[data-g=Experimental]"); await pg.wait_for_timeout(200)
+        await pg.screenshot(path="test/w3_estudiantes.png")
+        # --- aplicación completa a E03 (Elsa Pato), con un ítem omitido (4) y uno sin oportunidad (10); hojas que se cierran
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(600); await pg.select_option("#aCod", "E03"); await pg.fill("#aApl", "Johanna Álvarez")
+        await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)"); await pg.wait_for_timeout(100)
+        print("inicio:", await pantalla(), "| siguiente:", await pg.text_content("#kNext"))
+        await avanzar(); print("práctica 1:", await pantalla(), "| sin respuesta oculto en práctica:", await pg.evaluate("document.querySelector('#kSinResp').classList.contains('oculto')"))
+        await pg.keyboard.press("2"); print("tecla 2 marca la opción B:", await pg.evaluate("document.querySelector('.opt.sel .letra').textContent") == "B"); await avanzar(); await responder_item(); await avanzar()
+        print("etapa situación 1:", await pantalla()); await avanzar()
+        s = await pantalla(); print("ítem 1:", s, "| siguiente deshabilitado sin respuesta:", await pg.is_disabled("#kNext"))
+        await pg.keyboard.press("1"); print("tecla 1 marca A:", await pg.evaluate("document.querySelector('.opt.sel .letra').textContent")); await pg.screenshot(path="test/w5_kid_item1.png")
+        await avanzar(); await responder_item("porque hay poco espacio para caminar"); await pg.screenshot(path="test/w6_kid_item2.png"); await avanzar()
+        await responder_item(); await pg.click("#kBack"); await pg.wait_for_timeout(100); print("atrás dentro de la misma hoja vuelve al ítem 2:", (await pantalla())["it"] == "I02"); await avanzar(); await avanzar()
+        print("ítem 4:", (await pantalla())["it"]); await pg.click("#kSinResp"); await pg.wait_for_selector("#dialogo:not(.oculto)"); print("diálogo con tres botones:", await pg.text_content("#dOk"), "/", await pg.text_content("#dOtro")); await pg.click("#dOk"); await pg.wait_for_timeout(100)
+        print("ítem 4 omitido:", await pg.text_content("#kBody .num .om"), "| siguiente habilitado:", not await pg.is_disabled("#kNext")); await avanzar()
+        print("etapa situación 2:", (await pantalla())["tipo"]); await avanzar(); await responder_item("para que cada uno sepa qué hacer"); await avanzar(); await responder_item(); await avanzar()
+        s = await pantalla(); print("segunda parte de la cartelera:", s["tipo"] == "etapa", "| atrás deshabilitado (hoja cerrada):", await pg.is_disabled("#kBack")); await avanzar()
+        print("ítem 7, atrás permitido hasta la portada de la hoja:", (await pantalla())["it"] == "I07", not await pg.is_disabled("#kBack")); await pg.keyboard.press("1"); await avanzar()
+        print("ítem 8 muestra la elección del 5:", "Luciana" in (await pg.text_content("#kBody .k-dep"))); await pg.keyboard.press("3"); await avanzar()
+        await avanzar(); await responder_item(); await avanzar()  # etapa S3a, ítem 9
+        print("ítem 10:", (await pantalla())["it"]); await pg.click("#kSinResp"); await confirmar(boton="#dOtro"); print("ítem 10 sin oportunidad:", await pg.text_content("#kBody .num .om")); await avanzar()
+        await aplicar_hasta_el_final()
+        print("fin:", (await pg.text_content("#kBody .res")).strip()[:120]); await pg.screenshot(path="test/w7_fin.png")
+        await pg.fill("#kObs", "prueba automática"); await pg.click("#kSave"); await pg.wait_for_timeout(1500)
+        d = await datos(); r = next(x for x in d["pc"] if x["codigo"] == "E03" and x["momento"] == "Pretest")
+        print("guardado E03 pretest:", r["estado"], "| auto:", r["auto"], "| protocolo:", r["protocolo"], "| respuestas:", len(r["respuestas"]))
+        if r["estado"].get("I04") != "omitido" or r["estado"].get("I10") != "faltante" or r["auto"].get("I01") != 2 or r["auto"].get("I08") != 2 or len(r["auto"]) != 8: errs.append("el registro de E03 no quedó como se aplicó")
+        # --- aplicación interrumpida: se retoma donde iba y luego "Terminar aquí" deja faltantes
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E02"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
+        for _ in range(4): await avanzar()  # instrucciones, práctica (sin responder), portada
+        for _ in range(3): await responder_item(); await avanzar()
+        await pg.click("#kExit"); await confirmar(); await pg.wait_for_selector("#aAvance:not(.oculto)"); print("aviso de avance:", (await pg.text_content("#aAvance")).strip()[:80])
+        await pg.reload(); await pg.wait_for_selector("#app:not(.oculto)"); await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_selector("#aAvance:not(.oculto)"); await pg.click("#btnContinuar"); await pg.wait_for_selector("#kid:not(.oculto)")
+        print("retoma en:", await pantalla())
+        await aplicar_hasta_el_final(terminar_en="I09")
+        print("terminada antes:", (await pg.text_content("#kBody .res")).strip()[:140]); await pg.click("#kSave"); await pg.wait_for_timeout(1500)
+        r = next(x for x in (await datos())["pc"] if x["codigo"] == "E02")
+        print("E02 faltantes:", [k for k, v in r["estado"].items() if v == "faltante"][:5], "… terminada_antes:", r["terminada_antes"])
+        if not r["terminada_antes"] or r["estado"].get("I09") != "faltante" or r["estado"].get("I20") != "faltante" or "I08" in r["auto"] and r["auto"]["I08"] is None: errs.append("Terminar aquí no dejó los ítems restantes como faltantes")
+        # --- sin conexión al guardar: queda en cola y se envía al volver la conexión
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(500); await pg.select_option("#aCod", "E04"); await pg.click("#btnStart"); await pg.wait_for_selector("#kid:not(.oculto)")
+        await aplicar_hasta_el_final()
+        await ctx.set_offline(True); await pg.click("#kSave"); await pg.wait_for_selector("#pendientes:not(.oculto)"); print("cola sin conexión:", (await pg.text_content("#pendientes")).strip()[:80])
+        await ctx.set_offline(False)
+        try: await pg.wait_for_selector("#pendientes.oculto", state="attached", timeout=8000); print("enviada sola al volver la conexión")
+        except Exception: await pg.click("#btnEnviarCola"); await pg.wait_for_selector("#pendientes.oculto", state="attached", timeout=15000); print("enviada con el botón")
+        await pg.wait_for_timeout(800); print("E04 guardado tras reconectar:", any(x["codigo"] == "E04" for x in (await datos())["pc"]), "| avance limpio:", await pg.evaluate("localStorage.getItem('avance')"))
+        # --- calificar: calificador 1 y 2 a ciegas, luego acuerdo
+        await pg.click("nav.menu button[data-v=calificar]"); await pg.wait_for_timeout(600); await pg.click("#cRol button[data-m='1']"); await pg.wait_for_timeout(200); await pg.fill("#cNombre", "Calificadora A")
+        prot = r["protocolo"] if False else next(x for x in (await datos())["pc"] if x["codigo"] == "E03")["protocolo"]
+        print("lista calificador 1:", len(await pg.query_selector_all("#calCuerpo tbody tr")), "protocolos | sin nombres:", "Pato" not in await pg.text_content("#calCuerpo"))
+        fila = await pg.query_selector(f"#calCuerpo tr:has-text('{prot}') [data-prot]"); await fila.click(); await pg.wait_for_timeout(300); await pg.screenshot(path="test/w8_calificar.png")
+        print("protocolo abierto:", (await pg.text_content(".cal-prot h3")).strip(), "| cerrados automáticos:", len(await pg.query_selector_all(".cal-item.cerrado .tag.ok, .cal-item.cerrado .tag.mal")), "| omitido fijo:", len(await pg.query_selector_all(".cal-item .fijo")))
+        for bt in await pg.query_selector_all(".rubrica button[data-v='2']"): await bt.click()
+        print("avance:", await pg.text_content("#cAvance")); await pg.click("#cGuardar"); await pg.wait_for_timeout(1200)
+        c1 = next(x for x in (await datos())["calif"] if x["codigo"] == "E03" and x["rol"] == "1"); print("calificación 1:", c1["completa"], c1["calificador"], len(c1["puntos"]), "ítems (omitido 4 = 0, faltante 10 fuera):", c1["puntos"].get("I04"), "I10" in c1["puntos"])
+        if not c1["completa"] or c1["puntos"].get("I04") != 0 or "I10" in c1["puntos"]: errs.append("la calificación 1 no respetó omitido/faltante")
+        await pg.click("#cRol button[data-m='2']"); await pg.wait_for_timeout(200); await pg.fill("#cNombre", "Calificador B"); await (await pg.query_selector(f"#calCuerpo tr:has-text('{prot}') [data-prot]")).click(); await pg.wait_for_timeout(300)
+        bts = [r_ for r_ in await pg.query_selector_all(".cal-item[data-item] .rubrica") if await r_.query_selector("button")]
+        for i, rub in enumerate(bts): await (await rub.query_selector(f"button[data-v='{2 if i % 3 else 1}']")).click()  # discrepa en un tercio de los ítems
+        await pg.click("#cGuardar"); await pg.wait_for_timeout(1200)
+        await pg.click("#cRol button[data-m='F']"); await pg.wait_for_timeout(300); print("acuerdo lista:", (await pg.text_content(f"#calCuerpo tr:has-text('{prot}')")).strip()[:90]); print("chips:", [ (await c.text_content()).strip() for c in await pg.query_selector_all(".cal-stats .chip")])
+        await (await pg.query_selector(f"#calCuerpo tr:has-text('{prot}') [data-prot]")).click(); await pg.wait_for_timeout(300); await pg.screenshot(path="test/w9_acuerdo.png")
+        ndif = len(await pg.query_selector_all(".cal-item.dif")); print("discrepancias resaltadas:", ndif, "| finales prellenadas:", await pg.text_content("#cAvance"))
+        for d_ in await pg.query_selector_all(".cal-item.dif .final"): await (await d_.query_selector("button[data-v='2']")).click()
+        await pg.click("#cGuardar"); await pg.wait_for_timeout(1200)
+        cf = next(x for x in (await datos())["calif"] if x["codigo"] == "E03" and x["rol"] == "F"); print("final:", cf["completa"], cf["calificador"], "| lista:", (await pg.text_content(f"#calCuerpo tr:has-text('{prot}')") if await pg.query_selector(f"#calCuerpo tr:has-text('{prot}')") else "ya no está en pendientes"))
+        if not cf["completa"]: errs.append("la puntuación final no quedó completa")
+        await pg.click("#cFiltro button[data-m=todos]"); await pg.wait_for_timeout(200); print("acordada en 'todos':", "Acordada" in (await pg.text_content(f"#calCuerpo tr:has-text('{prot}')")))
+        # --- ficha: sumas por habilidad (Conclusiones vacía por el ítem 10 faltante), edición y cambio de código
+        await pg.click("nav.menu button[data-v=estudiantes]"); await pg.wait_for_timeout(300); await pg.click("#tablaP .gtabs button[data-g=Experimental]"); await pg.wait_for_timeout(200)
+        print("marcas de calificación (Experimental):", [ (await c.text_content()).strip() for c in await pg.query_selector_all("#tablaP [data-cal]")])
+        await pg.click("#tablaP a[data-ficha=E03]"); await pg.wait_for_selector("#ficha:not(.oculto)"); await pg.wait_for_timeout(200); await pg.screenshot(path="test/w13_ficha.png")
+        dims = await pg.evaluate("[...document.querySelectorAll('#ficha table.dims tbody tr')].map(tr => [tr.children[0].textContent.trim().split(' 0-')[0], tr.children[1].textContent.trim()])"); print("ficha E03 pretest:", dims)
+        if dims[3][1] != "–" or dims[0][1] == "–" or dims[5][1] != "–": errs.append("las sumas de la ficha no respetan el dato faltante del ítem 10")
+        print("consentimiento ausente (no hay módulo de acudientes):", await pg.query_selector("#ficha .consent") is None)
+        await pg.click("#ficha h2 a[data-editar]"); await pg.wait_for_selector("#fichaEdit:not(.oculto)"); await pg.fill("#eApellido", "Pato Lucas"); await pg.fill("#eObs", "usa gafas"); await pg.click("#eGuardar"); await pg.wait_for_timeout(1200)
+        print("editado:", (await pg.text_content("#ficha h2")).strip()[:20], "|", (await pg.text_content("#ficha p.guia")).strip()[-30:], "| en tabla:", await pg.text_content("#tablaP tbody tr:first-child td:nth-child(2)"))
+        await pg.click("#ficha h2 a[data-editar]"); await pg.wait_for_selector("#fichaEdit:not(.oculto)"); await pg.fill("#eCodigo", "E07"); await pg.click("#eGuardar"); await pg.wait_for_timeout(1200)
+        d = await datos(); regs = [any(p["codigo"] == "E07" for p in d["participantes"]), any(p["codigo"] == "E03" for p in d["participantes"]), len([x for x in d["pc"] if x["codigo"] == "E07"]), len([x for x in d["calif"] if x["codigo"] == "E07"]), len([x for x in d["calif"] if x["codigo"] == "E03"])]
+        print("código E03 → E07 (plantel, aplicaciones y calificaciones):", regs)
+        if regs != [True, False, 1, 3, 0]: errs.append("el cambio de código no movió al estudiante con sus registros")
+        await pg.click("#ficha h2 a[data-editar]"); await pg.wait_for_selector("#fichaEdit:not(.oculto)"); await pg.fill("#eCodigo", "E04"); await pg.click("#eGuardar"); await pg.wait_for_selector("#eMsg .aviso")
+        msg = (await pg.text_content("#eMsg")).strip(); print("código repetido (E04 es de Elena Nito):", msg[:80])
+        if "Elena Nito" not in msg: errs.append("el código repetido no se rechazó con el nombre del dueño")
+        await pg.fill("#eCodigo", "E03"); await pg.click("#eGuardar"); await pg.wait_for_timeout(1200); d = await datos(); print("de vuelta a E03:", [any(p["codigo"] == "E03" for p in d["participantes"]), len([x for x in d["pc"] if x["codigo"] == "E03"]), len([x for x in d["calif"] if x["codigo"] == "E03"])])
+        await pg.click("#ficha details summary"); await pg.wait_for_timeout(200); print("tabla de ítems en la ficha:", len(await pg.query_selector_all("#ficha table.items-tab tbody tr")), "filas"); await pg.screenshot(path="test/w13_ficha_items.png")
+        await pg.click("#ficha [data-aplicar][data-m=Postest]"); await pg.wait_for_timeout(300)
+        print("aplicar ahora desde la ficha:", await pg.evaluate("[document.querySelector('#v-aplicar').classList.contains('oculto'), document.querySelector('#aCod').value, document.querySelector('#aMom .activo').dataset.m]"), "| volver visible:", await pg.evaluate("!document.querySelector('#v-aplicar [data-volver]').classList.contains('oculto')"), "| hash:", await pg.evaluate("location.hash"))
+        await pg.click("#v-aplicar [data-volver]"); await pg.wait_for_timeout(200); print("volver:", await pg.evaluate("[location.hash, !document.querySelector('#v-estudiantes').classList.contains('oculto')]"))
+        await pg.click("#tablaP [data-cal][data-m=Pretest][data-cal=E03]"); await pg.wait_for_timeout(500); print("marca de calificación lleva a Calificar:", await pg.evaluate("location.hash"), (await pg.text_content("#calCuerpo .cal-prot h3, #calCuerpo table")).strip()[:30]); await pg.go_back(); await pg.wait_for_timeout(300); print("atrás del navegador:", await pg.evaluate("location.hash"))
+        await pg.click("nav.menu button[data-v=estudiantes]"); await pg.wait_for_timeout(300); await pg.click("#tablaP .gtabs button[data-g=Experimental]"); await pg.wait_for_timeout(200)
+        await pg.click("#tablaP a[data-ficha=E03]"); await pg.wait_for_selector("#ficha:not(.oculto)"); await pg.click("#ficha [data-borrar][data-m=Pretest]"); await confirmar(); await pg.wait_for_timeout(1200)
+        d = await datos(); print("aplicación eliminada desde la ficha (con sus calificaciones):", len([x for x in d["pc"] if x["codigo"] == "E03"]), len([x for x in d["calif"] if x["codigo"] == "E03"])); await pg.keyboard.press("Escape")
+        # --- papelera
+        await pg.click("#tablaP .gtabs button[data-g=Control]"); await pg.wait_for_timeout(200)
+        await pg.click("#tablaP [data-del=E05]"); await confirmar(); await pg.wait_for_timeout(1000)
+        await pg.click("#tablaP [data-del=E04]"); await confirmar("E04"); await pg.wait_for_timeout(1200)
+        print("papelera:", await pg.text_content("#tablaP .papelera summary"))
+        await pg.click("#tablaP .papelera summary"); await pg.click("#tablaP [data-rest=E04]"); await pg.wait_for_timeout(1200); await pg.click("#tablaP .gtabs button[data-g=Control]"); await pg.wait_for_timeout(200)
+        print("E04 tras recuperar:", len(await pg.query_selector_all("#tablaP [data-ficha=E04]")) > 0, "aplicaciones:", len([x for x in (await datos())["pc"] if x["codigo"] == "E04"]), "| papelera:", len(await pg.query_selector_all("#tablaP .papelera")))
+        await pg.screenshot(path="test/w12_estudiantes_final.png")
+        # --- tabla de respuestas y Excel
+        await pg.click("nav.menu button[data-v=respuestas]"); await pg.click("#tablaR .gtabs button[data-g=Control]"); await pg.wait_for_selector("#tablaR table")
+        print("tabla Control:", len(await pg.query_selector_all("#tablaR tbody tr")), "filas (2 por estudiante),", len(await pg.query_selector_all("#tablaR thead tr:nth-child(2) th")), "columnas | momentos:", [(await c.text_content()) for c in await pg.query_selector_all("#tablaR td.mom")], "|", await pg.text_content("#resumenR"))
+        print("fijas:", await pg.evaluate("getComputedStyle(document.querySelector('#tablaR td.r-mom')).position + ' ' + getComputedStyle(document.querySelector('#tablaR td.r-mom')).left"))
+        await pg.screenshot(path="test/w14_respuestas.png")
+        await pg.click("#rVer button[data-m=todo]"); await pg.wait_for_timeout(200); print("todo:", len(await pg.query_selector_all("#tablaR thead tr:nth-child(2) th")), "columnas"); await pg.screenshot(path="test/w15_respuestas_todo.png")
+        async with pg.expect_download() as dl: await pg.click("#btnExcel")
+        d_ = await dl.value; await d_.save_as("test/descarga.xlsx"); print("excel:", d_.suggested_filename)
+        await pg.check("#rCalif"); await pg.check("#rMeta")
+        async with pg.expect_download() as dl: await pg.click("#btnExcel")
+        d_ = await dl.value; await d_.save_as("test/descarga_calif.xlsx"); wbc = openpyxl.load_workbook("test/descarga_calif.xlsx"); enc = [c.value for c in wbc["Experimental"][1]]
+        print("excel con calificadores y metadatos:", wbc.sheetnames, "| columnas:", len(enc), "| C1_02:", "C1_02" in enc, "| FechaHora:", "FechaHora" in enc, "| hoja Acuerdo:", [c.value for c in wbc["Acuerdo"][1]])
+        if "Acuerdo" not in wbc.sheetnames or "C1_02" not in enc or "C2_20" not in enc: errs.append("el Excel con calificadores no trae las columnas o la hoja de acuerdo")
+        wb = openpyxl.load_workbook("test/descarga.xlsx")
+        for ws in wb: print("  hoja", ws.title, ws.max_row - 1, "filas,", ws.max_column, "columnas:", [c.value for c in ws[1]][:10], "...", [c.value for c in ws[1]][-3:], "| momentos:", [r[4] for r in ws.iter_rows(min_row=2, values_only=True)][:4])
+        enc = [c.value for c in wb["Experimental"][1]]
+        esperadas = ["Grupo", "Codigo", "Nombre", "Apellido", "Momento", "Sexo", "Edad", "Protocolo", "Indagacion", "Justificacion", "Perspectivas", "Conclusiones", "Revision", "TotalPC", "P01", "P20", "Omitidos", "Faltantes", "R01", "R02a", "R02b", "R06a_Luciana", "R06a_Samuel", "EI5a", "R17a", "R17_fin", "R20b", "EscribeAplicador"]
+        falt = [x for x in esperadas if x not in enc]; print("columnas esperadas presentes:", not falt, falt)
+        if falt: errs.append("faltan columnas en el Excel: " + ", ".join(falt))
+        async with pg.expect_download() as dl: await pg.click("#btnCopia")
+        d_ = await dl.value; await d_.save_as("test/copia.json"); copia = json.load(open("test/copia.json")); print("copia:", d_.suggested_filename, "|", {k: len(v) for k, v in copia.items() if isinstance(v, list)})
+        if "calif" not in copia: errs.append("la copia de seguridad no trae las calificaciones")
+        await pg.click("#btnBitacora"); await pg.wait_for_selector("#bitacora:not(.oculto)"); print("bitácora:", len(await pg.query_selector_all("#bitacora tbody tr")), "eventos | último:", await pg.text_content("#bitacora tbody tr:first-child td:nth-child(2)")); await pg.keyboard.press("Escape")
+        await pg.click("nav.menu button[data-v=estudiantes]"); await pg.wait_for_timeout(200)
+        await pg.fill("#pCodigo", "E05"); await pg.fill("#pNombre", "Otro"); await pg.fill("#pApellido", "Más"); await pg.select_option("#pGrupo", "Control"); await pg.select_option("#pSexo", "Femenino"); await pg.fill("#pEdad", "8"); await pg.click("#btnAddP"); await pg.wait_for_timeout(300)
+        print("código repetido (E05 en papelera):", await pg.text_content("#pMsg"))
+        await pg.hover("#tablaP .estado.si"); await pg.wait_for_timeout(150); print("chip al pasar el cursor:", repr(await pg.evaluate("(() => { const e = document.querySelector('#tablaP .estado.si'); return e.textContent.trim() + ' | ' + getComputedStyle(e).color })()")))
+        # --- buscador en estudiantes (aparece con más de 5 en el grupo)
+        await pg.click("nav.menu button[data-v=estudiantes]"); await pg.wait_for_timeout(300)  # vuelve a sugerir el código libre
+        for i in range(6):
+            await pg.fill("#pNombre", f"Niño{i}"); await pg.fill("#pApellido", "Prueba"); await pg.select_option("#pGrupo", "Experimental"); await pg.select_option("#pSexo", "Masculino"); await pg.fill("#pEdad", "8"); await pg.click("#btnAddP"); await pg.wait_for_timeout(700)
+        await pg.fill("#pBuscar", "niño3"); await pg.wait_for_timeout(200); print("buscador en estudiantes:", await pg.text_content("#pBuscarN"), "| filas visibles:", len(await pg.query_selector_all("#tablaP tbody tr:not(.oculto)")))
+        await pg.click("nav.menu button[data-v=aplicar]"); await pg.wait_for_timeout(300); await pg.fill("#aBuscar", "elsa"); print("buscador en aplicar:", [(await o.text_content()) for o in await pg.query_selector_all("#aCod option")])
+        print("errores:", errs)
+        await b.close()
+        sys.exit(1 if errs else 0)
+asyncio.run(main())

@@ -1,0 +1,8 @@
+node_modules/
+.netlify/
+.env
+.blobs/
+test/*.png
+test/*.xlsx
+test/*.json
+test/*.csv
