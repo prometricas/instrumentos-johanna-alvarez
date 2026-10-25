@@ -110,7 +110,7 @@ function verEstudiantes() {
       `<td><button class="x ${n ? 'con-datos' : ''}" data-del="${esc(p.codigo)}" title="${n ? `Eliminar (tiene ${n} aplicaci${n > 1 ? 'ones' : 'ón'}; se guardan en la papelera)` : 'Eliminar estudiante'}">×</button></td></tr>`; };
   const lista = ps.filter((p) => p.grupo === grupoActivo);
   const buscar = lista.length > 5 ? `<div class="buscar"><input id="pBuscar" placeholder="Buscar por nombre o código" aria-label="Buscar estudiante"><span id="pBuscarN"></span></div>` : '';
-  $('#tablaP').innerHTML = tabsGrupo(ps, (l) => l.length, buscar) + (lista.length ? `<table class="datos"><thead><tr><th>Código</th><th>Nombre</th><th>Sexo</th><th>Edad</th><th>Prueba<small>${esc(PC.tecnico)}</small></th><th>Calificación<small>dos calificadores y acuerdo</small></th><th></th></tr></thead><tbody>` + lista.map(filaP).join('') + '</tbody></table>'
+  $('#tablaP').innerHTML = tabsGrupo(ps, (l) => l.length, buscar) + (lista.length ? `<table class="datos"><thead><tr><th>Código</th><th>Nombre</th><th>Sexo</th><th>Edad</th><th>Prueba<small>${esc(DEFS[versionDeGrupo(grupoActivo)].tecnico)}</small></th><th>Calificación<small>dos calificadores y acuerdo</small></th><th></th></tr></thead><tbody>` + lista.map(filaP).join('') + '</tbody></table>'
     : `<div class="aviso nota">Aún no hay estudiantes en el grupo ${grupoActivo}. Regístrelos con el formulario de arriba.</div>`) + papeleraHtml();
   activarTabs($('#tablaP'), verEstudiantes);
   $('#pBuscar')?.addEventListener('input', () => filtrarFilas($('#pBuscar'), $('#tablaP table'), $('#pBuscarN')));
@@ -242,6 +242,8 @@ document.addEventListener('click', (e) => { if (e.target.matches('[data-ficha]')
 let preApl = null;
 const momA = seg('#aMom');
 $('#aInsCorto').textContent = PC.corto; $('#aInsTec').textContent = `${PC.titulo} · ${PC.tecnico}`;
+const pintarTecApl = () => { const d = DEFS[versionDeGrupo(grupoDe($('#aCod').value))] || PC; $('#aInsTec').textContent = `${d.titulo} · ${d.tecnico}`; };
+$('#aCod').addEventListener('change', pintarTecApl);
 function irAplicar(codigo, momento) { preApl = { codigo, momento }; $('#ficha').classList.add('oculto'); origen = 'estudiantes'; ir('aplicar'); }
 $('#ayudaBtn').addEventListener('click', () => { $('#ayudaPanel').innerHTML = guionHtml(); $('#ayudaPanel').classList.toggle('oculto'); });
 function llenarSelEst(q = '') {
@@ -249,6 +251,7 @@ function llenarSelEst(q = '') {
   const lista = D.participantes.filter((p) => !ql || `${p.codigo} ${nom(p)}`.toLowerCase().includes(ql));
   sel.innerHTML = porGrupo(lista).map(([g, l]) => `<optgroup label="${g}">` + l.map((p) => `<option value="${esc(p.codigo)}">${esc(p.codigo)} · ${esc(nom(p))}</option>`).join('') + '</optgroup>').join('') || `<option value="">${ql ? '(sin coincidencias)' : '(registre estudiantes primero)'}</option>`;
   if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
+  if (typeof pintarTecApl === 'function') pintarTecApl();
 }
 $('#aBuscar').addEventListener('input', () => llenarSelEst($('#aBuscar').value));
 async function verAplicar() {
