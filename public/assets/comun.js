@@ -4,6 +4,24 @@ const $ = (s, el = document) => el.querySelector(s);
 const esc = (s) => String(s ?? '').replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' }[c]));
 const z = (n) => String(n).padStart(2, '0');
 const hoy = () => { const d = new Date(); return `${d.getFullYear()}-${z(d.getMonth() + 1)}-${z(d.getDate())}`; };
+const ahoraLocal = () => { const d = new Date(); return `${hoy()} ${z(d.getHours())}:${z(d.getMinutes())}:${z(d.getSeconds())}`; };
+// Fechas para leer en pantalla en formato DD-mmm-AAAA («25-oct-2026», con hora si la trae: «25-oct-2026 10:34»). Los datos,
+// la tabla de respuestas, el Excel y la bitácora conservan AAAA-MM-DD, que se ordena bien y es el formato de análisis.
+// Nombres de aplicadores: mayúscula inicial («carlos  jara» → «Carlos Jara»; «maría de los ángeles» → «María de los Ángeles»)
+// y una clave sin tildes ni mayúsculas para no repetir el mismo nombre (la misma regla que en netlify/functions/api.mjs).
+const PARTICULAS = new Set(['de', 'del', 'la', 'las', 'los', 'y', 'e']);
+const nombrePropio = (s) => String(s || '').trim().replace(/\s+/g, ' ').slice(0, 60).split(' ').filter(Boolean)
+  .map((w, i) => { const l = w.toLocaleLowerCase('es'); return i > 0 && PARTICULAS.has(l) ? l : l.split('-').map((x) => x.charAt(0).toLocaleUpperCase('es') + x.slice(1)).join('-'); }).join(' ');
+const claveNombre = (s) => String(s || '').normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().replace(/[^a-z ]/g, '').replace(/\s+/g, ' ').trim();
+// Aplicadores de una prueba: la prueba se aplica en varias sesiones y puede tener varios (aplicador = el de la última sesión).
+const aplicadoresDe = (r) => (r ? (Array.isArray(r.aplicadores) && r.aplicadores.length ? r.aplicadores : [r.aplicador]).filter(Boolean) : []);
+const listaY = (l) => (l.length > 1 ? `${l.slice(0, -1).join(', ')} y ${l[l.length - 1]}` : l[0] || '');
+const MESES = ['ene', 'feb', 'mar', 'abr', 'may', 'jun', 'jul', 'ago', 'sep', 'oct', 'nov', 'dic'];
+function fFecha(s, hora = true) {
+  const m = String(s || '').match(/^(\d{4})-(\d{2})-(\d{2})(?:[ T](\d{2}):(\d{2}))?/);
+  if (!m) return String(s || '');
+  return `${m[3]}-${MESES[+m[2] - 1]}-${m[1]}${hora && m[4] ? ` ${m[4]}:${m[5]}` : ''}`;
+}
 function toast(t, mal) { const e = $('#toast'); e.textContent = t; e.classList.toggle('mal', !!mal); e.classList.add('ver'); clearTimeout(e._t); e._t = setTimeout(() => e.classList.remove('ver'), 3200); }
 
 async function api(ruta, opciones = {}) {
@@ -130,7 +148,7 @@ function columnasRespuestas(op = {}) {
   c('meta', 'VersionInstrumento', `Versión del instrumento con la que se aplicó (1 = ${nombreVersion(1)}, grupo Piloto; 2 = ${nombreVersion(2)}, Experimental y Control; difieren en nombres, opciones y claves de los ítems 1, 7, 8, 11, 12, 13, 14 y 16 y en las rúbricas)`, (r) => versionDe(r));
   if (op.meta) {
     c('meta', 'FechaHora', 'Fecha y hora de la aplicación', (r) => r.fecha_hora || r.fecha || '');
-    c('meta', 'Aplicador', 'Quién aplicó la prueba', (r) => r.aplicador || '');
+    c('meta', 'Aplicador', 'Quién aplicó la prueba; si la aplicaron varias personas en distintas sesiones, todas, separadas por punto y coma', (r) => aplicadoresDe(r).join('; '));
     c('meta', 'Duracion', 'Duración de la aplicación en segundos', (r) => r.duracion_seg ?? '');
   }
   for (const h of PC.habilidades) c('hab', h.col, `${h.nombre} (ítems ${h.items.map((x) => ITEM[x].num).join(', ')}; 0-8). Vacío si falta un ítem.`, (r, cal) => sumas(r, cal.F)[h.id] ?? '');
@@ -142,8 +160,8 @@ function columnasRespuestas(op = {}) {
   }
   if (op.calif) {
     for (const rol of ['1', '2']) for (const it of RUBRICA) c('calif', `C${rol}_${z(it.num)}`, `Calificador ${rol} · ítem ${it.num}`, (r, cal) => cal[rol]?.puntos?.[it.codigo] ?? '');
-    c('calif', 'Calificador1', 'Calificador 1 (fecha de su calificación completa)', (r, cal) => (cal['1']?.completa ? cal['1'].fecha : ''));
-    c('calif', 'Calificador2', 'Calificador 2 (fecha de su calificación completa)', (r, cal) => (cal['2']?.completa ? cal['2'].fecha : ''));
+    c('calif', 'Calificador1', 'Nombre del calificador 1 (o «Calificador 1» si no se definió)', (r, cal) => cal['1']?.calificador || '');
+    c('calif', 'Calificador2', 'Nombre del calificador 2 (o «Calificador 2» si no se definió)', (r, cal) => cal['2']?.calificador || '');
     c('calif', 'Acuerdo', 'Fecha de la puntuación acordada', (r, cal) => (cal.F?.completa ? cal.F.fecha : ''));
   }
   if (op.resp !== false) {

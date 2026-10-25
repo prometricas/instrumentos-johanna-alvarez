@@ -7,7 +7,7 @@
     "variable": "Habilidades emergentes de pensamiento crítico",
     "fuente": "Álvarez Pulgarín (2026), elaboración propia a partir de Paul y Elder (2005)",
     "corto": "Pensamiento crítico",
-    "tecnico": "6 situaciones · 20 ítems · 0 a 40 puntos · versión del 11 de octubre (pilotaje)",
+    "tecnico": "6 situaciones · 20 ítems · 0 a 40 puntos · versión del 11-oct-2026 (pilotaje)",
     "tabla": "Pensamiento crítico",
     "instrucciones": "Escucha con atención la lectura de cada situación y sigue el texto en la pantalla. Después responde las preguntas de manera individual. En algunas deberás marcar una opción, relacionar información, completar una idea o escribir una respuesta corta. Cuando se te pida explicar, escribe la razón que mejor muestre lo que piensas. Si necesitas que vuelvan a leer una pregunta, puedes pedirlo. Trata de responder todas las preguntas.",
     "guion": {
@@ -1402,6 +1402,7 @@
       "respuesta_obligatoria": "La app no permite avanzar hasta que todas las partes del ítem estén respondidas (en «marca las dos», al menos dos marcas; en las uniones, las dos filas; en los textos, algo escrito). La única excepción es que el aplicador registre el ítem como «Sin respuesta»: omitió (0 puntos) o sin oportunidad (dato faltante)."
     },
     "version": 1,
-    "nombre_version": "Versión del 11 de octubre de 2026 (pilotaje)"
+    "nombre_version": "Versión del 11-oct-2026 (pilotaje)",
+    "fecha_version": "2026-10-11"
   }
 }

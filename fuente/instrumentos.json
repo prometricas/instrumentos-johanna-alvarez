@@ -7,7 +7,7 @@
     "variable": "Habilidades emergentes de pensamiento crítico",
     "fuente": "Álvarez Pulgarín (2026), elaboración propia a partir de Paul y Elder (2005); versión definitiva tras validación por expertos y pilotaje",
     "corto": "Pensamiento crítico",
-    "tecnico": "6 situaciones · 20 ítems · 0 a 40 puntos · versión definitiva (25-oct-2026)",
+    "tecnico": "6 situaciones · 20 ítems · 0 a 40 puntos · versión definitiva del 25-oct-2026",
     "tabla": "Pensamiento crítico",
     "instrucciones": "Escucha con atención la lectura de cada situación y sigue el texto en la pantalla. Después responde las preguntas de manera individual. En algunas deberás marcar una opción, relacionar información, completar una idea o escribir una respuesta corta. Cuando se te pida explicar, escribe la razón que mejor muestre lo que piensas. Si necesitas que vuelvan a leer una pregunta, puedes pedirlo. Trata de responder todas las preguntas.",
     "guion": {
@@ -1505,6 +1505,7 @@
       },
       "nota": "Dos versiones del instrumento conviven en la app: el grupo Piloto se aplica y se califica con la versión 1 (fuente/instrumentos_v1.json, 11 de octubre: nombres, opciones, claves y rúbricas originales); Experimental y Control, con la versión 2 (esta, la definitiva del TFM). Cada aplicación guarda su versión y se muestra y califica con la definición de esa versión; los registros sin versión son de la versión 1."
     },
-    "nombre_version": "Versión definitiva (25 de octubre de 2026)"
+    "nombre_version": "Versión definitiva del 25-oct-2026",
+    "fecha_version": "2026-10-25"
   }
 }

@@ -46,9 +46,10 @@
     <div class="pendientes oculto" id="pendientes"></div>
     <section id="v-estudiantes">
       <div class="cabeza"><div><h2>Registro de estudiantes</h2><p class="guia" style="margin:0">«Aplicar» empieza una prueba y «Continuar» la retoma en la pregunta en la que quedó, en cualquier sesión y en cualquier día (las respuestas se guardan tras cada pregunta). Al terminar, la marca pasa a «✓ Completa». El nombre abre la ficha; las marcas de calificación llevan a Calificar. El botón ? muestra el guion del aplicador.</p></div><div class="resumen" id="resumenP"></div></div>
-      <details class="tarjeta registro" id="pRegistro" style="margin-top:12px">
+      <div class="plegables">
+      <details class="tarjeta registro" id="pRegistro">
         <summary><span class="mas">＋</span> Registrar un estudiante nuevo</summary>
-        <div class="fila" style="margin-top:12px">
+        <div class="fila" style="margin-top:10px">
           <div class="campo" style="max-width:110px"><label for="pCodigo">Código</label><input id="pCodigo"></div>
           <div class="campo" style="flex:1.4"><label for="pNombre">Nombre</label><input id="pNombre" placeholder="Nombre"></div>
           <div class="campo" style="flex:1.4"><label for="pApellido">Apellido</label><input id="pApellido" placeholder="Apellido"></div>
@@ -59,11 +60,25 @@
         </div>
         <div id="pMsg" style="margin-top:10px"></div>
       </details>
+      <details class="tarjeta registro" id="aplRegistro" title="Quienes aplican la prueba: se eligen de esta lista al aplicar o continuar">
+        <summary><span class="mas">＋</span> Aplicadores <b class="cuenta" id="aplCuenta"></b></summary>
+        <div id="aplPanel"></div>
+      </details>
+      </div>
       <div class="tabla" id="tablaP"></div>
     </section>
 
     <section id="v-calificar" class="oculto">
-      <div class="cabeza"><div><h2>Calificar</h2><p class="guia" style="margin:0">Los ocho ítems cerrados se califican solos con la clave. Los doce de rúbrica los puntúan de forma independiente dos calificadores (0, 1 o 2), viendo solo el código de protocolo —sin nombre, grupo ni momento—; luego, en «Acuerdo», se revisan las discrepancias y se fija la puntuación final. Las omisiones valen 0 por regla y los ítems sin oportunidad no se puntúan.</p></div><div class="resumen" id="resumenC"></div></div>
+      <div class="cabeza"><div><h2>Calificar</h2><p class="guia" style="margin:0">Se califican las pruebas completas. Los ocho ítems cerrados se califican solos con la clave; los doce de rúbrica los puntúan por separado dos calificadores (0, 1 o 2), viendo solo el código del estudiante, sin nombre, grupo ni momento (con las dos pruebas: código-A y código-B, sin revelar cuál es el pretest). En «Acuerdo» se fija la puntuación final.</p></div><div class="resumen" id="resumenC"></div></div>
+      <details class="tarjeta registro" id="calRegistro" title="Nombres de los dos calificadores: se muestran junto al rol para que cada quien califique como el que es">
+        <summary><span class="mas">＋</span> Nombres de los calificadores <b class="cuenta" id="calCuenta"></b></summary>
+        <div class="fila" style="margin-top:10px">
+          <div class="campo" style="flex:1"><label for="cNom1">Calificador 1</label><input id="cNom1" placeholder="Nombre y apellido" maxlength="60"></div>
+          <div class="campo" style="flex:1"><label for="cNom2">Calificador 2</label><input id="cNom2" placeholder="Nombre y apellido" maxlength="60"></div>
+          <button class="btn" id="cNomGuardar">Guardar</button>
+        </div>
+        <div id="cNomMsg" style="margin-top:8px"></div>
+      </details>
       <div id="calCuerpo"></div>
       <a href="#" class="volver oculto" data-volver>← Volver a Estudiantes</a>
     </section>
@@ -101,7 +116,7 @@
 
 <!-- CARGA Y DIÁLOGO -->
 <div class="cargando oculto" id="cargando"><span class="spin"></span>Cargando…</div>
-<div class="modal oculto" id="dialogo"><div class="modal-caja dialogo"><h3 id="dTitulo"></h3><p id="dTexto"></p><div class="campo oculto" id="dCampo"><label id="dLabel" for="dInput"></label><input id="dInput" autocomplete="off"></div><div class="fila" id="dBotones" style="justify-content:flex-end;margin-top:16px"><button class="btn sec" id="dCancelar" type="button">Cancelar</button><button class="btn sec" id="dOtro" type="button">Otro</button><button class="btn" id="dOk" type="button">Aceptar</button></div></div></div>
+<div class="modal oculto" id="dialogo"><div class="modal-caja dialogo"><h3 id="dTitulo"></h3><p id="dTexto"></p><div class="campo oculto" id="dCampo"><label id="dLabel" for="dInput"></label><input id="dInput" autocomplete="off"></div><div class="campo elegir oculto" id="dElegir"><label for="dSelect" id="dElegirEti"></label><select id="dSelect"></select><p class="nota" id="dElegirNota"></p></div><div class="fila" id="dBotones" style="justify-content:flex-end;margin-top:16px"><button class="btn sec" id="dCancelar" type="button">Cancelar</button><button class="btn sec" id="dOtro" type="button">Otro</button><button class="btn" id="dOk" type="button">Aceptar</button></div></div></div>
 
 <!-- BITÁCORA -->
 <div class="modal oculto" id="bitacora"><div class="modal-caja" style="width:min(1000px,100%)"><button class="x cerrar" id="bitCerrar" title="Cerrar">×</button><div id="bitCuerpo"></div></div></div>

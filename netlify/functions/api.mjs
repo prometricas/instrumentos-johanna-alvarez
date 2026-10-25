@@ -52,6 +52,24 @@ async function fallo(req) {
   return json({ error: r.hasta > Date.now() ? "Demasiados intentos fallidos. Espere 15 segundos." : "Clave incorrecta" }, r.hasta > Date.now() ? 429 : 401);
 }
 const GRUPOS = ["Piloto", "Experimental", "Control"];
+/* ---------- aplicadores: lista cerrada de quienes aplican la prueba (se elige de ella; no se escribe) ---------- */
+// Lista inicial: quienes ya aplicaron la prueba, con el nombre bien escrito (en los datos aparecían variantes escritas a mano).
+const APLICADORES_INICIALES = ["Johanna Álvarez", "Carlos Jara"];
+const PARTICULAS = new Set(["de", "del", "la", "las", "los", "y", "e"]);
+// "carlos  jara" → "Carlos Jara"; "maría de los ángeles" → "María de los Ángeles" (la misma regla que en public/assets/comun.js)
+function nombrePropio(s) {
+  return String(s || "").trim().replace(/\s+/g, " ").slice(0, 60).split(" ").filter(Boolean)
+    .map((w, i) => { const l = w.toLocaleLowerCase("es"); return i > 0 && PARTICULAS.has(l) ? l : l.split("-").map((x) => x.charAt(0).toLocaleUpperCase("es") + x.slice(1)).join("-"); }).join(" ");
+}
+const claveNombre = (s) => String(s || "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toLowerCase().replace(/[^a-z ]/g, "").replace(/\s+/g, " ").trim(); // para no repetir nombres
+function limpiarAplicadores(entrada) {
+  const lista = [], vistos = new Set();
+  for (const x of Array.isArray(entrada) ? entrada : []) { const n = nombrePropio(x), k = claveNombre(n); if (n.length < 3 || !k || vistos.has(k)) continue; vistos.add(k); lista.push(n); if (lista.length >= 40) break; }
+  return lista;
+}
+// Nombres de los dos calificadores (siempre hay dos): se muestran junto al rol para que cada quien califique como el que es.
+async function leerCalificadores() { const c = await store("config").get("calificadores", { type: "json" }); return { 1: nombrePropio(c?.["1"] || ""), 2: nombrePropio(c?.["2"] || "") }; }
+async function leerAplicadores() { const c = await store("config").get("aplicadores", { type: "json" }); return c && Array.isArray(c.lista) ? c.lista : APLICADORES_INICIALES.slice(); }
 const MOMENTOS = ["Pretest", "Postest"];
 
 async function leerTodo(name) {
@@ -143,7 +161,20 @@ export default async (req) => {
   if (ruta === "datos" && req.method === "GET") { // la bitácora no viaja aquí: solo con /api/bitacora o en la copia de seguridad
     const [participantes, pc, calif] = await Promise.all(STORES.map(leerTodo));
     participantes.sort((a, b) => a.codigo.localeCompare(b.codigo));
-    return json({ v: 3, participantes, pc, calif });
+    return json({ v: 3, participantes, pc, calif, aplicadores: await leerAplicadores(), calificadores: await leerCalificadores() });
+  }
+  if (ruta === "calificadores" && req.method === "PUT") { // nombres de los calificadores 1 y 2
+    const n = { 1: nombrePropio(body["1"] || ""), 2: nombrePropio(body["2"] || "") }, antes = await leerCalificadores();
+    await store("config").setJSON("calificadores", { ...n, fecha_hora: ahora() });
+    if (antes[1] !== n[1] || antes[2] !== n[2]) await bitacora("calificadores", `Calificador 1: ${n[1] || "(sin nombre)"} · Calificador 2: ${n[2] || "(sin nombre)"}`);
+    return json({ ok: true, calificadores: n });
+  }
+  if (ruta === "aplicadores" && req.method === "PUT") { // la lista se define en el módulo Calificar
+    if (!Array.isArray(body.lista)) return json({ error: "Lista inválida" }, 400);
+    const lista = limpiarAplicadores(body.lista), antes = await leerAplicadores();
+    await store("config").setJSON("aplicadores", { lista, fecha_hora: ahora() });
+    if (antes.join("|") !== lista.join("|")) await bitacora("aplicadores", `Lista de aplicadores: ${lista.join(", ") || "(vacía)"}`);
+    return json({ ok: true, lista });
   }
   if (ruta === "bitacora" && req.method === "GET") {
     const bit = await leerTodo("bitacora"); bit.sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora));
@@ -158,7 +189,7 @@ export default async (req) => {
     const [participantes, pc, calif, papelera, bit] = await Promise.all([...STORES, "papelera", "bitacora"].map(leerTodo));
     bit.sort((a, b) => a.fecha_hora.localeCompare(b.fecha_hora));
     await bitacora("copia", "Descarga de copia de seguridad");
-    return json({ version: 2, fecha_hora: ahora(), participantes, pc, calif, papelera, bitacora: bit });
+    return json({ version: 2, fecha_hora: ahora(), participantes, pc, calif, papelera, aplicadores: await leerAplicadores(), calificadores: await leerCalificadores(), bitacora: bit });
   }
   if (ruta === "copia" && req.method === "POST") { // restaurar: escribe lo que trae la copia sin borrar lo demás
     const c = body.copia || {};
@@ -168,6 +199,8 @@ export default async (req) => {
     for (const r of c.pc || []) if (r && r.codigo && MOMENTOS.includes(r.momento)) { await store("pc").setJSON(llave(r.codigo, r.momento), r); n++; }
     for (const r of c.calif || []) if (r && r.codigo && MOMENTOS.includes(r.momento) && ROLES.includes(r.rol)) { await store("calif").setJSON(llaveC(r.codigo, r.momento, r.rol), r); n++; }
     for (const x of c.papelera || []) if (x && x.participante && x.participante.codigo) { await store("papelera").setJSON(x.participante.codigo, x); n++; }
+    if (Array.isArray(c.aplicadores) && c.aplicadores.length) { await store("config").setJSON("aplicadores", { lista: limpiarAplicadores(c.aplicadores), fecha_hora: ahora() }); n++; }
+    if (c.calificadores && typeof c.calificadores === "object") { await store("config").setJSON("calificadores", { 1: nombrePropio(c.calificadores["1"] || ""), 2: nombrePropio(c.calificadores["2"] || ""), fecha_hora: ahora() }); n++; }
     await bitacora("restauracion_copia", `${n} registros escritos desde una copia de seguridad del ${c.fecha_hora || "?"}`);
     return json({ ok: true, n });
   }
@@ -253,6 +286,9 @@ export default async (req) => {
       ...(incompleta ? { incompleta: true, pendientes, interrumpida_en: codigos.includes(r.interrumpida_en) ? r.interrumpida_en : pendientes[0] || "" } : {}), observaciones: String(r.observaciones || "").slice(0, 800) };
     const k = llave(codigo, momento);
     const previo = await store("pc").get(k, { type: "json" });
+    // La prueba se aplica en varias sesiones: se conservan todos los aplicadores que la continuaron (aplicador = el de la última sesión).
+    const antes = previo && previo.incompleta ? (Array.isArray(previo.aplicadores) ? previo.aplicadores : [previo.aplicador]) : [];
+    row.aplicadores = [...new Set([...antes, row.aplicador].map((x) => String(x || "").trim()).filter(Boolean))];
     await store("pc").setJSON(k, row);
     let borradas = 0;
     if (previo) for (const rol of ROLES) { if (await store("calif").get(llaveC(codigo, momento, rol), { type: "json" })) { await store("calif").delete(llaveC(codigo, momento, rol)); borradas++; } } // una nueva aplicación invalida las calificaciones de la anterior

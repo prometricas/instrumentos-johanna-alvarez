@@ -44,6 +44,7 @@ h2{font-size:1.44em;font-weight:600;margin:0 0 4px;color:var(--azul)}
 p.guia{color:var(--tinta-2);margin:0 0 19px;max-width:96ch;font-size:.97em;line-height:1.5}
 .cabeza{display:flex;align-items:flex-end;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:6px}
 .cabeza .resumen{color:var(--tinta-2);font-size:.92em;text-align:right}
+.dialogo .elegir select{width:100%} .dialogo .elegir .nota{margin:6px 0 0;font-size:.84em;color:var(--tinta-2)}
 
 /* componentes */
 .tarjeta{background:var(--blanco);border:1px solid var(--linea);border-radius:14px;padding:19px 22px;margin-bottom:17px}
@@ -90,10 +91,18 @@ table.datos.est td{padding:8px 12px} table.datos.est td.apl-td{padding:6px 10px;
 .apl.curso .sigue{font-size:.82em;font-weight:800;color:#B54E00}
 .estado.si{white-space:nowrap}
 .cal-est{font-weight:800;border-radius:6px;padding:1px 7px} .cal-est.pend{color:#B42318;background:#FDECEA} .cal-est.ok{color:var(--ok);background:var(--ok-suave)}
-details.registro{padding:10px 18px 12px} details.registro[open]{padding-bottom:18px}
-details.registro summary{cursor:pointer;font-weight:700;color:var(--azul);list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+/* plegables delgados: registrar estudiante, aplicadores, nombres de los calificadores */
+.plegables{display:flex;gap:10px;flex-wrap:wrap;margin-top:10px;align-items:flex-start} .plegables > details{flex:1 1 280px;margin:0} #aplRegistro{flex:0 1 380px}
+details.registro{padding:6px 14px 7px;margin-top:10px} details.registro[open]{padding-bottom:14px}
+details.registro summary{cursor:pointer;font-weight:700;color:var(--azul);list-style:none;display:flex;align-items:center;gap:8px;user-select:none;font-size:.95em;line-height:1.3}
+details.registro summary .cuenta{font-weight:600;color:var(--tinta-2);font-size:.9em}
+details.registro .nota{margin:8px 0 6px;font-size:.82em;color:var(--tinta-2);line-height:1.4}
+.lista-apl{list-style:none;margin:0;padding:0;display:flex;flex-direction:column;gap:4px}
+.lista-apl li{display:flex;align-items:center;gap:6px;padding:4px 6px 4px 10px;border-radius:9px;background:var(--fondo)} .lista-apl li span{flex:1;font-weight:600}
+.lista-apl li.agregar{background:none;padding:4px 0 0} .lista-apl li.agregar input{flex:1;min-width:0;padding:7px 10px;border:1px solid var(--linea);border-radius:9px;font:inherit}
+details.registro .msg{color:var(--mal);font-size:.84em;margin-top:6px}
 details.registro summary::-webkit-details-marker{display:none}
-details.registro summary .mas{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--azul-suave);font-size:1.05em}
+details.registro summary .mas{display:inline-flex;align-items:center;justify-content:center;width:22px;height:22px;border-radius:50%;background:var(--azul-suave);font-size:1em;flex:none}
 details.registro[open] summary .mas{background:var(--azul);color:#fff}
 details.registro .fila{row-gap:8px} details.registro .fila .campo{min-width:120px}
 .lnk.chico{padding:3px 8px;font-size:.88em;font-weight:500} .lnk.mal{color:var(--mal)} .lnk.mal:hover{background:var(--mal-suave)}
@@ -144,16 +153,18 @@ details.registro .fila{row-gap:8px} details.registro .fila .campo{min-width:120p
   position:fixed;inset:0;background:var(--k-fondo);display:flex;flex-direction:column;z-index:20;font-family:"Nunito","Segoe UI",Verdana,sans-serif;color:var(--tinta);line-height:1.4;transition:background .3s}
 .kid-top{display:flex;align-items:center;gap:14px;padding:7px clamp(14px,2.4vw,28px);background:#fff;border-bottom:4px solid var(--k);font-size:.86em;color:var(--tinta-2);min-height:50px;transition:border-color .3s}
 .kid-top img{height:28px;width:auto}
-.kid-top .tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw} .kid-top .tag b{color:var(--k-oscuro)}
-.kid-top .prog{flex:1;display:flex;gap:4px;min-width:120px;height:18px;align-items:stretch}
-.kid-top .prog .s{position:relative;flex:1;border-radius:999px;background:#EEF1F6;overflow:hidden;min-width:22px;border:2px solid transparent;transition:box-shadow .3s}
-.kid-top .prog .s.bloque{margin-left:10px}
-.kid-top .prog .s i{display:block;height:100%;background:var(--c);width:0;transition:width .35s;border-radius:999px;opacity:.9}
-.kid-top .prog .s b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:var(--k-oscuro);mix-blend-mode:multiply;letter-spacing:.02em}
-.kid-top .prog .s.lista b{color:#fff;mix-blend-mode:normal}
+.kid-top .tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw} .kid-top .tag b{color:var(--k-oscuro);font-weight:800}
+.kid-top .prog{flex:1;display:flex;gap:5px;min-width:120px;height:26px;align-items:center}
+.kid-top .prog .s{position:relative;flex:1;height:16px;border-radius:999px;background:#EEF1F6;min-width:30px;transition:box-shadow .3s}
+.kid-top .prog .s.bloque{margin-left:12px} /* la pausa separa los dos bloques */
+.kid-top .prog .s i{position:absolute;left:0;top:0;bottom:0;display:block;background:var(--c);width:0;transition:width .35s;border-radius:999px}
+.kid-top .prog .s b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;gap:2px;font-size:11px;font-weight:900;color:#5B6478;line-height:1}
+.kid-top .prog .s b small{font-size:10px}
+.kid-top .prog .s.lista b{color:#fff}
+/* situación actual: su número en un círculo destacado */
 .kid-top .prog .s.actual{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c)}
-.kid-top .prog .s.actual b{animation:prog-late 1.6s ease-in-out infinite}
-@keyframes prog-late{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
+.kid-top .prog .s.actual b{inset:auto;left:50%;top:50%;transform:translate(-50%,-50%);width:26px;height:26px;border-radius:50%;background:var(--c);color:#fff;font-size:14px;box-shadow:0 0 0 2.5px #fff,0 2px 6px rgba(0,0,0,.2);animation:prog-late 1.6s ease-in-out infinite}
+@keyframes prog-late{0%,100%{transform:translate(-50%,-50%) scale(1)}50%{transform:translate(-50%,-50%) scale(1.12)}}
 .kid-top #kCount{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:800;color:#fff;background:var(--k);border-radius:999px;padding:4px 14px;font-size:.95em;transition:background .3s}
 .kid-top button#kExit{background:#fff;border:1.5px solid var(--linea);border-radius:10px;padding:7px 12px;font:inherit;font-weight:700}
 .kid-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(280px,5fr) minmax(0,8fr);gap:clamp(10px,1.4vw,18px);padding:clamp(10px,1.4vh,16px) clamp(14px,2vw,26px)}
@@ -319,7 +330,18 @@ table.datos td.cen,table.datos th.cen{text-align:center}
 .gtabs button.activo{background:var(--c,#6B7280);color:#fff}
 .gtabs button.activo b{background:#fff;color:var(--c,#6B7280)}
 .g-piloto{--c:#6B7280} .g-control{--c:#1E8E4A} .g-experimental{--c:#F36A00}
-.gdesc{flex:1 1 300px;min-width:0;margin:0;padding:6px 0 6px 12px;border-left:4px solid var(--c,#6B7280);color:var(--tinta-2);font-size:.86em;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+/* resumen del grupo junto a las pestañas: una sola línea; si no cabe junto al buscador, el buscador baja a la siguiente fila */
+.gdesc{flex:0 1 auto;min-width:0;margin:0;padding:6px 0 6px 12px;border-left:4px solid var(--c,#6B7280);color:var(--tinta-2);font-size:.88em;line-height:1.4;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;cursor:default}
+.gdesc b{color:var(--tinta);font-weight:700} .gdesc .ok{color:var(--ok);font-weight:800} .gdesc b.curso{color:#B54E00}
+@media (max-width:1440px){ /* portátiles: pestañas y resumen más compactos, para que el resumen quepa junto a las pestañas */
+  .gtabs{gap:6px} .gtabs button{padding:7px 13px} .gdesc{font-size:.82em} .gdesc .lg{display:none} .gbar{column-gap:12px}
+}
+/* descripción de cada grupo: información flotante al posar el mouse (o al enfocar con el teclado) sobre su botón */
+.gtabs button[data-tip]{position:relative}
+.gtabs button[data-tip]::after{content:attr(data-tip);position:absolute;left:0;top:calc(100% + 9px);z-index:40;width:max-content;max-width:min(300px,80vw);white-space:normal;text-align:left;background:#1F2A44;color:#fff;font-size:13px;font-weight:500;line-height:1.4;padding:8px 12px;border-radius:9px;box-shadow:0 8px 22px rgba(20,28,50,.22);opacity:0;visibility:hidden;transform:translateY(-3px);transition:opacity .12s,transform .12s,visibility .12s;pointer-events:none}
+.gtabs button[data-tip]::before{content:"";position:absolute;left:20px;top:calc(100% + 3px);z-index:41;border:6px solid transparent;border-top:0;border-bottom-color:#1F2A44;opacity:0;visibility:hidden;transition:opacity .12s,visibility .12s;pointer-events:none}
+.gtabs button[data-tip]:hover::after,.gtabs button[data-tip]:focus-visible::after{opacity:1;visibility:visible;transform:none;transition-delay:.15s}
+.gtabs button[data-tip]:hover::before,.gtabs button[data-tip]:focus-visible::before{opacity:1;visibility:visible;transition-delay:.15s}
 
 /* ficha del estudiante */
 .modal{position:fixed;inset:0;background:rgba(28,36,51,.45);display:flex;align-items:center;justify-content:center;padding:20px 16px;z-index:45;overflow:auto}
