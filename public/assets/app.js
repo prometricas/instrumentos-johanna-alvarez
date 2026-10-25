@@ -185,7 +185,7 @@ function fichaPrueba(codigo) {
   const obs = (r) => (r.observaciones ? ` · <i>${esc(r.observaciones)}</i>` : '');
   const meta = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<div class="meta"><span><b>${m}</b> sin aplicar</span><button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Aplicar ahora</button></div>`;
     const om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante');
-    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.incompleta ? ` · <b style="color:#B54E00">incompleta</b> (quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')})` : ''}${obs(r)}${chipCal(codigo, m)}</span>${r.incompleta ? `<button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Continuar</button>` : ''}<button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
+    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.incompleta ? ` · <b style="color:#B54E00">incompleta</b> (quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')})` : ''}${nombreVersion(r) ? ` · <span title="Se aplicó con una versión anterior del instrumento; se muestra y se califica con sus textos y claves originales">${esc(nombreVersion(r))}</span>` : ''}${obs(r)}${chipCal(codigo, m)}</span>${r.incompleta ? `<button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Continuar</button>` : ''}<button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
   const pend = regs.some((r, i) => r && S[i].total == null) ? '<p class="guia" style="margin:6px 0 0;font-size:.85em">Las sumas aparecen cuando la puntuación acordada está completa y ningún ítem queda sin oportunidad de respuesta.</p>' : '';
   return `<div class="prueba"><h3>${esc(PC.corto)}<span>${esc(PC.titulo)}</span></h3><table class="dims"><thead><tr><th></th><th>Pretest</th><th>Postest</th><th title="Postest menos pretest">Cambio</th></tr></thead><tbody>${filas}</tbody></table>${pend}${meta}</div>`;
 }
@@ -193,7 +193,7 @@ function fichaItems(codigo) { // respuestas y puntaje de cada ítem, pre y post
   const regs = MOMENTOS.map((m) => reg(codigo, m)); if (!regs.some(Boolean)) return '';
   const S = MOMENTOS.map((m, i) => (regs[i] ? sumas(regs[i], cal(codigo, m).F) : null));
   const resp = (r, it) => { if (!r) return '<span class="nada">–</span>'; const e = r.estado?.[it.codigo]; if (e === 'faltante') return '<i>sin oportunidad</i>'; if (e === 'omitido') return '<i>omitió</i>';
-    return it.partes.map((p) => { const v = r.respuestas[it.codigo + p.id]; if (vacio(v)) return ''; if (p.tipo === 'union') return p.filas.map((f) => `${f.nombre} → ${v[f.id] || '–'}`).join(' · '); if (p.tipo === 'texto') return `«${esc(v)}»`; if (p.tipo === 'multiple') return v.join(', '); return p.letras ? v : esc(textoOpcion(p, v)); }).filter(Boolean).join(' · '); };
+    return defVersion(it, r).partes.map((p) => { const v = r.respuestas[it.codigo + p.id]; if (vacio(v)) return ''; if (p.tipo === 'union') return p.filas.map((f) => `${f.nombre} → ${v[f.id] || '–'}`).join(' · '); if (p.tipo === 'texto') return `«${esc(v)}»`; if (p.tipo === 'multiple') return v.join(', '); return p.letras ? v : esc(textoOpcion(p, v)); }).filter(Boolean).join(' · '); };
   const pt = (i, it) => { if (!regs[i]) return '–'; if (it.auxiliar) return ''; const v = S[i].items[it.codigo]; return v == null ? (regs[i].estado?.[it.codigo] === 'faltante' ? '–' : '<span class="nada" title="Pendiente de calificación acordada">?</span>') : v; };
   const resumen = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<span><b>${m}:</b> sin aplicar</span>`; const n = PUNTUABLES.filter((it) => !r.estado?.[it.codigo]).length, om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante'), c = estadoCalif(cal(codigo, m)); return `<span><b>${m}:</b> ${n} de ${PUNTUABLES.length} ítems respondidos${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''} · calificación ${{ completa: 'acordada', doble: 'por acordar', parcial: 'en proceso', pendiente: 'pendiente' }[c]}</span>`; }).join('');
   return `<div class="prueba"><h3>Respuestas y puntaje de cada ítem<span>Puntaje final: clave en los cerrados, puntuación acordada en los de rúbrica; «?» = pendiente de acordar</span></h3><div class="resumen-items">${resumen}</div><details class="items-ficha"><summary>Ver los ${ITEMS.length} ítems</summary><table class="items-tab"><thead><tr><th>Ítem</th><th>Pretest</th><th class="pt">Pts</th><th>Postest</th><th class="pt">Pts</th></tr></thead><tbody>${ITEMS.map((it) => `<tr><td><b>${it.num ?? 'EI'}</b> <small>${esc(it.sub || it.etiqueta)}</small></td><td class="txt">${resp(regs[0], it)}</td><td class="pt">${pt(0, it)}</td><td class="txt">${resp(regs[1], it)}</td><td class="pt">${pt(1, it)}</td></tr>`).join('')}</tbody></table></details></div>`;
@@ -276,7 +276,9 @@ $('#btnStart').addEventListener('click', async () => {
   localStorage.setItem('aplicador', apl);
   const prev = reg(codigo, momento), a = leerAvance();
   if (a && a.codigo === codigo && a.momento === momento && (await dialogo({ titulo: 'Aplicación sin terminar', texto: 'Hay un avance guardado de esta misma aplicación en este dispositivo.', ok: 'Continuar donde iba', cancelar: 'Empezar de nuevo' }))) return startKid({ codigo, momento, aplicador: apl }, a);
-  if (prev && prev.incompleta) {
+  if (prev && prev.incompleta && versionDe(prev) !== VERSION_ACTUAL) { // no se mezclan dos versiones del instrumento en una misma aplicación
+    if (!(await dialogo({ titulo: 'Aplicación incompleta de otra versión', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta, aplicada con la ${nombreVersion(prev)}. No se puede continuar con la versión actual del instrumento: solo es posible empezar de nuevo (se reemplaza lo guardado).`, ok: 'Empezar de nuevo', peligro: true }))) return;
+  } else if (prev && prev.incompleta) {
     const r = await dialogo({ titulo: 'Aplicación incompleta', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta (${prev.fecha_hora || prev.fecha}; quedó en el ítem ${ITEM[prev.interrumpida_en] ? (ITEM[prev.interrumpida_en].num || prev.interrumpida_en) : '?'}). Puede continuar desde donde quedó o empezar de nuevo (se reemplaza lo guardado).`, ok: 'Continuar donde quedó', otro: 'Empezar de nuevo', cancelar: 'Cancelar' });
     if (!r) return;
     if (r === true) { m.innerHTML = ''; return startKid({ codigo, momento, aplicador: apl }, avanceDesdeRegistro(prev)); }
@@ -575,6 +577,7 @@ function verListaCal() {
 }
 // Respuesta del estudiante a un ítem, parte por parte, con la ayuda de la clave (uniones correctas, informaciones pertinentes).
 function respuestaHtml(r, it) {
+  it = defVersion(it, r); // con los textos, opciones y claves de la versión con la que se aplicó
   const ayuda = it.puntuacion.ayuda, apl = () => '';
   const partes = it.partes.map((p) => {
     const k = it.codigo + p.id, v = r.respuestas[k]; let h = `<div class="p"><span class="q">${esc(p.pregunta || p.etiqueta || (p.prefijo ? p.prefijo + '…' : ''))}</span>`;
@@ -585,9 +588,19 @@ function respuestaHtml(r, it) {
     else if (p.tipo === 'texto') h += `<span class="v txt">${p.prefijo ? `<i style="color:var(--tinta-2)">${esc(p.prefijo)}</i> ` : ''}${esc(v)}${p.sufijo || ''}</span>${apl(k)}`;
     return h + '</div>';
   });
-  if (it.depende) { const d = it.depende, pd = ITEM[d.item].partes.find((x) => x.id === d.parte), v = r.respuestas[d.item + d.parte]; partes.unshift(`<div class="p"><span class="q">${esc(d.texto)}</span><span class="v">${v ? esc(textoOpcion(pd, v)) : '<span class="nada">sin registro</span>'}</span></div>`); }
-  if (it.final) { const f = eleccionFinal(r, it), pd = ITEM[it.final.inicial.item].partes.find((x) => x.id === it.final.inicial.parte); partes.push(`<div class="p"><span class="q">Elección final (según su decisión)</span><span class="v">${f ? esc(textoOpcion(pd, f)) : '<span class="nada">no se puede derivar</span>'}</span></div>`); }
+  if (it.depende) { const d = it.depende, pd = defVersion(ITEM[d.item], r).partes.find((x) => x.id === d.parte), v = r.respuestas[d.item + d.parte]; partes.unshift(`<div class="p"><span class="q">${esc(d.texto)}</span><span class="v">${v ? esc(textoOpcion(pd, v)) : '<span class="nada">sin registro</span>'}</span></div>`); }
+  if (it.final) { const f = eleccionFinal(r, it), pd = defVersion(ITEM[it.final.inicial.item], r).partes.find((x) => x.id === it.final.inicial.parte); partes.push(`<div class="p"><span class="q">Elección final (según su decisión)</span><span class="v">${f ? esc(textoOpcion(pd, f)) : '<span class="nada">no se puede derivar</span>'}</span></div>`); }
   return `<div class="resp">${partes.join('')}</div>`;
+}
+// Ejemplos orientadores de la guía (ítems 18 y 20, Tabla B4): se resalta el que corresponde a la primera elección y la decisión
+// del estudiante; los demás quedan plegados.
+function ejemplosHtml(r, it) {
+  const ej = it.puntuacion.ejemplos; if (!ej) return '';
+  const ini = r.respuestas[ej.inicial.item + ej.inicial.parte], dec = r.respuestas[ej.decision.item + ej.decision.parte];
+  const pIni = defVersion(ITEM[ej.inicial.item], r).partes.find((x) => x.id === ej.inicial.parte), pDec = ITEM[ej.decision.item].partes.find((x) => x.id === ej.decision.parte);
+  const fila = (e) => `<li class="${e.inicial === ini && e.decision === dec ? 'este' : ''}"><small>${esc(textoOpcion(pIni, e.inicial))} · ${esc(textoOpcion(pDec, e.decision))}</small>${esc(e.texto)}</li>`;
+  const propio = ej.lista.find((e) => e.inicial === ini && e.decision === dec);
+  return `<details class="ejemplos"><summary>${esc(ej.titulo)}</summary>${propio ? `<p class="este">Para este estudiante (${esc(textoOpcion(pIni, ini))} · ${esc(textoOpcion(pDec, dec))}): <b>${esc(propio.texto)}</b></p>` : ''}<ul>${ej.lista.map(fila).join('')}</ul></details>`;
 }
 function cabItem(r, it, extra = '') {
   const e = r.estado?.[it.codigo], tag = e === 'omitido' ? '<span class="tag om">Omitió · 0 por regla</span>' : e === 'faltante' ? '<span class="tag">Sin oportunidad · dato faltante</span>' : extra;
@@ -604,12 +617,13 @@ function verProtocolo() {
     if (esCerrado(it)) return itemCerradoHtml(r, it);
     const e = r.estado?.[it.codigo], pu = it.puntuacion;
     const der = e ? `<div class="rubrica"><div class="fijo">${e === 'omitido' ? 'Omisión con oportunidad: se califica con 0 por regla.' : 'Sin oportunidad de respuesta: dato faltante, no se puntúa.'}</div></div>`
-      : `<div class="rubrica">${[2, 1, 0].map((n) => `<button data-pt="${it.codigo}" data-v="${n}" class="${puntos[it.codigo] === n ? 'sel' : ''}"><b>${n}</b><span>${esc(pu.niveles[n])}</span></button>`).join('')}${pu.nota ? `<p class="nota">${esc(pu.nota)}</p>` : ''}</div>`;
+      : `<div class="rubrica">${[2, 1, 0].map((n) => `<button data-pt="${it.codigo}" data-v="${n}" class="${puntos[it.codigo] === n ? 'sel' : ''}"><b>${n}</b><span>${esc(pu.niveles[n])}</span></button>`).join('')}${pu.nota ? `<p class="nota">${esc(pu.nota)}</p>` : ''}${ejemplosHtml(r, it)}</div>`;
     return `<div class="cal-item" data-item="${it.codigo}">${cabItem(r, it)}${respuestaHtml(r, it)}${der}</div>`;
   };
+  const ver = nombreVersion(r) ? `<p class="aviso" style="margin:0 0 10px">Este protocolo se aplicó con la <b>${esc(nombreVersion(r))}</b>: las respuestas se muestran con los textos, opciones y claves de esa versión. Califique con la rúbrica vigente.</p>` : '';
   const pinta = () => { const h = hechos(r, { puntos }), n = nRub(r); $('#cAvance').innerHTML = `<span>${h} de ${n} ítems puntuados</span><div class="barra"><i style="width:${n ? 100 * h / n : 0}%"></i></div>`; };
   $('#calCuerpo').innerHTML = `<div class="cal-prot"><div><h3>Protocolo ${esc(r.protocolo)}</h3><span class="sub">Calificador ${rol}${nombreCal(rol) ? ': ' + esc(nombreCal(rol)) : ''} · aplicado el ${esc(r.fecha)}${C ? ' · calificación guardada el ' + esc(C.fecha) : ''}</span></div><div class="avance" id="cAvance"></div><button class="lnk chico" id="cVolver">← Volver a la lista</button></div>` +
-    `<p class="guia">Lea la respuesta del estudiante y elija el nivel de la rúbrica (2, 1 o 0). Los ítems cerrados ya están calificados con la clave. Puede guardar a medias y continuar después.</p>` +
+    `<p class="guia">Lea la respuesta del estudiante y elija el nivel de la rúbrica (2, 1 o 0). El 0 es solo para la omisión («no sé», «porque sí») o la respuesta sin relación con la pregunta; cualquier otro intento recibe al menos 1. Los ítems cerrados ya están calificados con la clave. Puede guardar a medias y continuar después.</p>` + ver +
     PUNTUABLES.map(itemHtml).join('') +
     `<div class="cal-pie"><div class="campo" style="max-width:240px"><label for="cNombre2">Nombre del calificador ${rol}</label><input id="cNombre2" value="${esc(nombreCal(rol))}" placeholder="Nombre"></div><div class="campo"><label for="cObs">Observaciones (opcional)</label><input id="cObs" value="${esc(C?.observaciones || '')}"></div><button class="btn grande" id="cGuardar">Guardar calificación</button><div class="msg" id="cMsg"></div></div>`;
   pinta(); window.scrollTo(0, 0);
@@ -636,7 +650,7 @@ function verAcuerdo() {
     const e = r.estado?.[it.codigo], dif = difs.includes(it), pu = it.puntuacion;
     const der = e === 'faltante' ? '<div class="rubrica"><div class="fijo">Sin oportunidad de respuesta: dato faltante, no se puntúa.</div></div>'
       : `<div><div class="acu"><div class="col"><small>Calificador 1</small><b>${c1.puntos[it.codigo] ?? '–'}</b></div><div class="col ${dif ? 'dif' : ''}"><small>Calificador 2</small><b>${c2.puntos[it.codigo] ?? '–'}</b></div><div class="col"><small>Final acordada</small>${e === 'omitido' ? '<b>0</b>' : `<div class="final">${[2, 1, 0].map((n) => `<button data-pt="${it.codigo}" data-v="${n}" class="${puntos[it.codigo] === n ? 'sel' : ''}">${n}</button>`).join('')}</div>`}</div></div>` +
-        `<details style="margin-top:8px;font-size:.86em;color:var(--tinta-2)"><summary style="cursor:pointer">Rúbrica</summary>${[2, 1, 0].map((n) => `<p style="margin:6px 0 0"><b>${n}:</b> ${esc(pu.niveles[n])}</p>`).join('')}${pu.nota ? `<p style="margin:6px 0 0"><i>${esc(pu.nota)}</i></p>` : ''}</details></div>`;
+        `<details style="margin-top:8px;font-size:.86em;color:var(--tinta-2)"><summary style="cursor:pointer">Rúbrica</summary>${[2, 1, 0].map((n) => `<p style="margin:6px 0 0"><b>${n}:</b> ${esc(pu.niveles[n])}</p>`).join('')}${pu.nota ? `<p style="margin:6px 0 0"><i>${esc(pu.nota)}</i></p>` : ''}${ejemplosHtml(r, it)}</details></div>`;
     return `<div class="cal-item ${dif ? 'dif' : ''}">${cabItem(r, it, dif ? '<span class="tag mal">Discrepancia</span>' : '<span class="tag ok">Coinciden</span>')}${respuestaHtml(r, it)}${der}</div>`;
   };
   const pinta = () => { const h = hechos(r, { puntos }), n = nRub(r); $('#cAvance').innerHTML = `<span>${h} de ${n} finales fijadas</span><div class="barra"><i style="width:${n ? 100 * h / n : 0}%"></i></div>`; };

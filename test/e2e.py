@@ -77,7 +77,7 @@ async def main():
         print("etapa situación 2:", (await pantalla())["tipo"]); await avanzar(); await responder_item("para que cada uno sepa qué hacer"); await avanzar(); await responder_item(); await avanzar()
         s = await pantalla(); print("segunda parte de la cartelera:", s["tipo"] == "etapa", "| atrás deshabilitado (hoja cerrada):", await pg.is_disabled("#kBack")); await avanzar()
         print("ítem 7, atrás permitido hasta la portada de la hoja:", (await pantalla())["it"] == "I07", not await pg.is_disabled("#kBack")); await pg.keyboard.press("1"); await avanzar()
-        print("ítem 8 muestra la elección del 5:", "Luciana" in (await pg.text_content("#kBody .k-dep"))); await pg.keyboard.press("3"); await avanzar()
+        print("ítem 8 muestra la elección del 5:", "Lis" in (await pg.text_content("#kBody .k-dep"))); await pg.keyboard.press("4"); await avanzar()  # eligió Lis en el 5 → clave D
         await avanzar(); await responder_item(); await avanzar()  # etapa S3a, ítem 9
         print("ítem 10:", (await pantalla())["it"]); await pg.click("#kSinResp"); await confirmar(boton="#dOtro"); print("ítem 10 sin oportunidad:", await pg.text_content("#kBody .num .om")); await avanzar()
         await aplicar_hasta_el_final()
@@ -201,7 +201,7 @@ async def main():
         wb = openpyxl.load_workbook("test/descarga.xlsx")
         for ws in wb: print("  hoja", ws.title, ws.max_row - 1, "filas,", ws.max_column, "columnas:", [c.value for c in ws[1]][:10], "...", [c.value for c in ws[1]][-3:], "| momentos:", [r[4] for r in ws.iter_rows(min_row=2, values_only=True)][:4])
         enc = [c.value for c in wb["Experimental"][1]]
-        esperadas = ["Grupo", "Codigo", "Nombre", "Apellido", "Momento", "Sexo", "Edad", "Protocolo", "OrdenSituaciones", "Indagacion", "Justificacion", "Perspectivas", "Conclusiones", "Revision", "TotalPC", "P01", "P20", "Omitidos", "Faltantes", "R01", "R02a", "R02b", "R06a_Luciana", "R06a_Samuel", "EI5a", "R17a", "R17_fin", "R20b", "Incompleta"]
+        esperadas = ["Grupo", "Codigo", "Nombre", "Apellido", "Momento", "Sexo", "Edad", "Protocolo", "OrdenSituaciones", "Indagacion", "Justificacion", "Perspectivas", "Conclusiones", "Revision", "TotalPC", "P01", "P20", "Omitidos", "Faltantes", "R01", "R02a", "R02b", "R06a_Lis", "R06a_Bruno", "VersionInstrumento", "EI5a", "R17a", "R17_fin", "R20b", "Incompleta"]
         falt = [x for x in esperadas if x not in enc]; print("columnas esperadas presentes:", not falt, falt)
         if falt: errs.append("faltan columnas en el Excel: " + ", ".join(falt))
         async with pg.expect_download() as dl: await pg.click("#btnCopia")

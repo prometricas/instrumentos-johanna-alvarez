@@ -242,6 +242,7 @@ export default async (req) => {
     const nResp = ITEMS.filter((it) => respondido(it, respuestas)).length;
     if (!nResp && !Object.values(estado).includes("faltante")) return json({ error: "La aplicación no tiene ninguna respuesta" }, 400);
     const row = { codigo, momento, fecha: r.fecha_inicio || hoy(), fecha_hora: ahora(), aplicador: String(r.aplicador || "").slice(0, 80), duracion_seg: Number(r.duracion_seg) || 0, protocolo: await protocoloDe(secreto, codigo, momento),
+      version: PC.version || 1, // versión del instrumento con la que se aplicó (los textos, claves y puntajes automáticos quedan ligados a ella)
       respuestas, estado, escriba, auto: autoPuntajes(respuestas, estado), ...(ordenValido(r.orden) ? { orden: r.orden } : {}),
       ...(incompleta ? { incompleta: true, pendientes, interrumpida_en: codigos.includes(r.interrumpida_en) ? r.interrumpida_en : pendientes[0] || "" } : {}), observaciones: String(r.observaciones || "").slice(0, 800) };
     const k = llave(codigo, momento);

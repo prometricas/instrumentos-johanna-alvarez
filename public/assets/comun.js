@@ -34,6 +34,17 @@ function eleccionFinal(reg, it) {
   return f.mantiene.includes(dec) ? ini : f.opuestos[ini];
 }
 const textoOpcion = (p, v) => { const o = (p.opciones || []).find((o) => o.v === v); return o ? o.t : (v ?? ''); };
+// Versión del instrumento con la que se aplicó un registro (los anteriores a la versión 2 no la traen: versión 1, pilotaje).
+const versionDe = (reg) => (reg && Number.isInteger(reg.version) ? reg.version : 1);
+const VERSION_ACTUAL = PC.version || 1;
+const LEGADO = (PC.versiones && PC.versiones.legado) || {};
+// Definición del ítem tal como se presentó en la versión del registro: para mostrar y calificar respuestas antiguas con sus
+// textos, opciones, uniones y claves originales (los puntajes automáticos ya quedaron guardados en el registro).
+function defVersion(it, reg) {
+  const v = versionDe(reg); if (v === VERSION_ACTUAL) return it;
+  const L = LEGADO[v]?.items?.[it.codigo]; return L ? { ...it, ...L } : it;
+}
+const nombreVersion = (reg) => { const v = versionDe(reg); return v === VERSION_ACTUAL ? '' : (LEGADO[v]?.nombre || `versión ${v}`); };
 // Valor de una parte en texto corto (tabla y Excel): letra, código de la opción, "A;C", o el texto escrito.
 function valorCorto(p, v) {
   if (vacio(v)) return '';
@@ -103,6 +114,7 @@ function columnasRespuestas(op = {}) {
   c('meta', 'Protocolo', 'Código de protocolo con el que se calificó la aplicación', (r) => r.protocolo || '');
   c('meta', 'Incompleta', 'Sí cuando la aplicación quedó incompleta (los ítems no alcanzados son dato faltante)', (r) => (r.incompleta ? 'Sí' : ''));
   c('meta', 'OrdenSituaciones', 'Orden en que se presentaron las situaciones (en el postest se barajan por bloques); vacío = orden del cuadernillo', (r) => (r.orden ? ordenNums(r).replace(/, /g, ',') : ''));
+  c('meta', 'VersionInstrumento', `Versión del instrumento con la que se aplicó (${VERSION_ACTUAL} = definitiva; 1 = versión del 11 de octubre usada en el pilotaje, con otras opciones y claves en los ítems 1, 7, 8, 11, 12, 13, 14 y 16)`, (r) => versionDe(r));
   if (op.meta) {
     c('meta', 'FechaHora', 'Fecha y hora de la aplicación', (r) => r.fecha_hora || r.fecha || '');
     c('meta', 'Aplicador', 'Quién aplicó la prueba', (r) => r.aplicador || '');

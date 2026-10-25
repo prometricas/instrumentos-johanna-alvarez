@@ -40,15 +40,15 @@ const TEXTOS = {
   I02b: { 2: ['si hay poco espacio los visitantes no pueden caminar bien', 'en el corredor hay más espacio pero pasan otros grupos y pueden tumbar los trabajos'], 1: ['es importante para la exposición', 'ayuda a saber dónde ponerla'], 0: ['los colores son bonitos', 'sí'] },
   I03b: { 2: { corredor: ['en el corredor hay más espacio para que los visitantes caminen'], salon: ['en el salón caben todos los trabajos y nadie los daña'] }, 1: ['es mejor', 'me gusta más ese lugar'], 0: ['porque sí', 'no sé'] },
   I04: { 2: ['¿Cuántos visitantes van a venir?', '¿A qué hora pasan los otros grupos por el corredor?', '¿Cuánto espacio necesitamos para todos los trabajos?'], 1: ['¿Podemos hacer la exposición?', '¿Qué día es la exposición?'], 0: ['¿De qué color son las cartulinas?', 'no sé'] },
-  I05b: { 2: { luciana: ['si organizan primero cada uno sabe qué hacer y no pierden tiempo'], samuel: ['si empiezan ya aprovechan los 25 minutos'] }, 1: ['para trabajar mejor', 'así es más rápido'], 0: ['Luciana es niña', 'porque sí'] },
+  I05b: { 2: { luciana: ['si organizan primero cada uno sabe qué hacer y no pierden tiempo'], samuel: ['si empiezan ya aprovechan los 25 minutos'] }, 1: ['para trabajar mejor', 'así es más rápido'], 0: ['Lis es niña', 'porque sí'] },
   I06d: { 2: { luciana: ['quiere mirar los materiales y repartir las tareas para trabajar con orden'], samuel: ['quiere empezar rápido para que les alcance el tiempo'] }, 1: ['quiere hacer bien la cartelera'], 0: ['le gusta', 'no sé'] },
   I10: { 2: ['los cuadernos se mojaron porque llovió y la ventana estaba abierta y estaban al lado de la ventana', 'entró la lluvia por la ventana abierta y mojó los cuadernos de la mesa, los del estante no porque estaban lejos'], 1: ['se mojaron por la lluvia', 'llovió y se mojaron'], 0: ['alguien les echó agua', 'los estudiantes los mojaron en el recreo'] },
   I13d: { 2: { mariana: ['cerca de la ventana entra más luz y se puede leer mejor'], daniel: ['al fondo hay menos ruido del patio y se pueden concentrar'] }, 1: ['es un buen lugar para leer'], 0: ['le gusta ese lugar'] },
   I15: { 2: ['hay menos ruido y pueden prender la lámpara cuando necesiten luz', 'no hay ruido del patio y tienen una lámpara'], 1: ['hay menos ruido', 'pueden encender la lámpara'], 0: ['hay más luz', 'no sé'] },
   EI5b: { patio: ['hay más espacio para correr', 'se puede jugar mejor'], corredor: ['si llueve no nos mojamos', 'está techado'] },
   I17b: { 2: { patio: ['lo haría en el patio pero si empieza a llover nos pasamos al corredor y dejamos un lado libre para que pase el otro grupo'], corredor: ['lo haría en el corredor con equipos más pequeños y dejando un espacio libre para el otro grupo, así no importa la lluvia'] }, 1: ['lo haría en el corredor porque puede llover', 'en el patio, y si llueve paramos'], 0: ['en el patio porque hay más espacio', 'no cambiaría nada'] },
-  I18a: { 2: ['podía llover y otro grupo tenía que pasar por el corredor'], 1: ['podía llover'], 0: ['el juego es divertido'] },
-  I18b: { 2: ['si llueve en el patio nos mojamos y en el corredor hay que dejar pasar al otro grupo'], 1: ['es importante'], 0: ['sí'] },
+  I18a: { 2: ['podía llover durante la actividad', 'otro grupo tenía que pasar varias veces por el corredor'], 1: ['podía llover'], 0: ['el juego es divertido'] },
+  I18b: { 2: ['si llueve en el patio nos mojamos, por eso preferí el corredor', 'en el corredor el otro grupo nos interrumpe, por eso me quedé en el patio pero con un plan por si llueve'], 1: ['iba a llover'], 0: ['sí'] },
   EI6b: { armada: ['así queda lista para mostrarla', 'no hay que armarla otra vez'], partes: ['es más fácil de llevar', 'pesa menos'] },
   I19b: { 2: { armada: ['la llevaría armada pero de lado para pasar por la puerta y la dejamos lista enseguida, así no gastamos los 10 minutos'], partes: ['la llevaría en partes grandes para pasar por la puerta y entre todos la armamos rápido para que alcancen los 10 minutos'] }, 1: ['la llevaría en partes porque no cabe por la puerta', 'la llevaría armada con cuidado'], 0: ['la llevaría armada porque es más bonita', 'igual'] },
   I20a: { 2: ['la puerta es estrecha y solo tenemos 10 minutos'], 1: ['la puerta es estrecha'], 0: ['la maqueta es grande'] },
@@ -77,14 +77,14 @@ function aplicacion(INS, nivel, ajuste, esp = {}) {
   q.I05 = calidad(nivel, ajuste); resp.I05a = al(['luciana', 'samuel']); resp.I05b = texto('I05b', q.I05, resp.I05a);
   q.I06 = calidad(nivel, ajuste); resp.I06a = q.I06 === 2 ? { luciana: 'B', samuel: 'D' } : q.I06 === 1 ? al([{ luciana: 'B', samuel: 'A' }, { luciana: 'C', samuel: 'D' }]) : al([{ luciana: 'A', samuel: 'C' }, { luciana: 'D', samuel: 'B' }]);
   resp.I06c = al(['luciana', 'samuel']); resp.I06d = texto('I06d', q.I06, resp.I06c);
-  unico('I07', 'A');
-  unico('I08', { luciana: 'C', samuel: 'B' }[resp.I05a]);
+  unico('I07', 'C');
+  unico('I08', { luciana: 'D', samuel: 'A' }[resp.I05a]); // clave según la elección del 5: Lis → D, Bruno → A
   // situación 3
   unico('I09', 'B');
   q.I10 = calidad(nivel, ajuste); resp.I10a = texto('I10', q.I10);
-  unico('I11', 'C'); unico('I12', 'A');
+  unico('I11', 'C'); unico('I12', 'D');
   // situación 4
-  q.I13 = calidad(nivel, ajuste); resp.I13a = q.I13 === 2 ? { mariana: 'C', daniel: 'B' } : q.I13 === 1 ? al([{ mariana: 'C', daniel: 'A' }, { mariana: 'D', daniel: 'B' }]) : al([{ mariana: 'A', daniel: 'D' }, { mariana: 'B', daniel: 'C' }]);
+  q.I13 = calidad(nivel, ajuste); resp.I13a = q.I13 === 2 ? { mariana: 'C', daniel: 'A' } : q.I13 === 1 ? al([{ mariana: 'C', daniel: 'B' }, { mariana: 'D', daniel: 'A' }]) : al([{ mariana: 'A', daniel: 'D' }, { mariana: 'B', daniel: 'C' }]); // Clara (id mariana) → C, Teo (id daniel) → A
   resp.I13c = al(['mariana', 'daniel']); resp.I13d = texto('I13d', q.I13, resp.I13c);
   unico('I14', 'B');
   q.I15 = calidad(nivel, ajuste); resp.I15a = texto('I15', q.I15);

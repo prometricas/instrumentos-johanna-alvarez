@@ -248,6 +248,10 @@ table.datos td .est{display:inline-flex;gap:6px;align-items:center}
 .rubrica button:disabled{opacity:.6;cursor:default}
 .rubrica .nota{font-size:.84em;color:var(--tinta-2);margin:4px 0 0;line-height:1.45}
 .rubrica .fijo{font-size:.95em;color:var(--tinta-2);background:var(--fondo);border-radius:10px;padding:10px 12px}
+.ejemplos{font-size:.84em;color:var(--tinta-2);margin-top:6px;line-height:1.45}
+.ejemplos summary{cursor:pointer;color:var(--azul);font-weight:700}
+.ejemplos p.este{margin:8px 0;padding:8px 10px;border-radius:10px;background:var(--azul-suave);color:var(--tinta)}
+.ejemplos ul{margin:6px 0 0;padding-left:18px} .ejemplos li{margin:0 0 6px} .ejemplos li small{display:block;color:var(--tinta-2);font-weight:700} .ejemplos li.este{color:var(--tinta)}
 .cal-pie{display:flex;gap:12px;align-items:center;flex-wrap:wrap;background:#fff;border:1px solid var(--linea);border-radius:14px;padding:14px 20px;position:sticky;bottom:0;box-shadow:0 -6px 18px rgba(28,36,51,.06)}
 .cal-pie .campo{flex:1} .cal-pie .msg{flex-basis:100%}
 .acu{display:grid;grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}
@@ -352,7 +356,9 @@ table.resp-ancha a[data-ficha]:hover{text-decoration:underline}
 .pendientes{display:flex;align-items:center;gap:14px;background:var(--pend-suave);border:1px solid #F8CFA8;border-left:5px solid var(--pend);border-radius:12px;padding:12px 16px;margin:0 0 18px;line-height:1.45}
 .pendientes span{flex:1}
 .buscar{display:flex;align-items:center;gap:10px;margin-left:auto}
-.buscar input{padding:8px 12px;border:1px solid var(--linea);border-radius:9px;min-width:230px;background:#fff}
+.buscar input,#aBuscar{padding:8px 12px 8px 36px;border:1px solid var(--acento);border-radius:9px;min-width:230px;background:var(--acento-suave) url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='16' height='16' viewBox='0 0 24 24' fill='none' stroke='%232F7FD6' stroke-width='2.4' stroke-linecap='round'%3E%3Ccircle cx='11' cy='11' r='7'/%3E%3Cpath d='m20 20-3.8-3.8'/%3E%3C/svg%3E") no-repeat 12px center;color:var(--tinta)}
+.buscar input::placeholder,#aBuscar::placeholder{color:#5A6B8C}
+.buscar input:focus,#aBuscar:focus{background-color:#fff;border-color:var(--acento-2);outline:2px solid var(--acento);outline-offset:0}
 .buscar span{color:var(--tinta-2);font-size:.88em;white-space:nowrap}
 label.check{display:inline-flex;align-items:center;gap:8px;color:var(--tinta-2);font-size:.92em;cursor:pointer;white-space:nowrap}
 label.check input{width:17px;height:17px;accent-color:var(--azul)}
