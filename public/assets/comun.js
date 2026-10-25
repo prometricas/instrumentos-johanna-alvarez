@@ -14,12 +14,26 @@ async function api(ruta, opciones = {}) {
 }
 
 /* ---------- el instrumento ---------- */
-const PC = INS.PC;
-const ITEMS = PC.items, ITEM = Object.fromEntries(ITEMS.map((i) => [i.codigo, i]));
-const PUNTUABLES = ITEMS.filter((i) => !i.auxiliar);
+// Dos versiones conviven: la vigente (PC, versión 2, grupos Experimental y Control) y la del 11 de octubre (PC_v1, grupo
+// Piloto). Las pantallas de administración trabajan con la vigente; la pantalla del niño usa la versión del grupo del
+// estudiante (usarVersion), y cada registro guarda la suya para mostrarse y calificarse con ella (defVersion).
+const DEFS = { 2: INS.PC, 1: INS.PC_v1 };
+const VERSION_ACTUAL = INS.PC.version || 2;
+const versionDeGrupo = (g) => (INS.PC.versiones && INS.PC.versiones.por_grupo && INS.PC.versiones.por_grupo[g]) || VERSION_ACTUAL;
+const versionDe = (reg) => (reg && Number.isInteger(reg.version) ? reg.version : 1); // los registros sin versión son del pilotaje
+const nombreVersion = (v) => (DEFS[v] ? DEFS[v].nombre_version : `versión ${v}`);
+let PC, ITEMS, ITEM, PUNTUABLES, RUBRICA, HAB;
+function usarVersion(v) {
+  PC = DEFS[v] || INS.PC;
+  ITEMS = PC.items; ITEM = Object.fromEntries(ITEMS.map((i) => [i.codigo, i]));
+  PUNTUABLES = ITEMS.filter((i) => !i.auxiliar);
+  RUBRICA = PUNTUABLES.filter((i) => i.puntuacion.tipo === 'rubrica');
+  HAB = Object.fromEntries(PC.habilidades.map((h) => [h.id, h]));
+}
+usarVersion(VERSION_ACTUAL);
 const esCerrado = (it) => it.puntuacion.tipo.startsWith('clave');
-const RUBRICA = PUNTUABLES.filter((i) => i.puntuacion.tipo === 'rubrica');
-const HAB = Object.fromEntries(PC.habilidades.map((h) => [h.id, h]));
+// Definición del ítem tal como se presentó en la versión del registro (textos, opciones, uniones y claves de esa versión).
+function defVersion(it, reg) { const d = DEFS[versionDe(reg)]; return (d && d.items.find((x) => x.codigo === it.codigo)) || it; }
 const GRUPOS = ['Piloto', 'Experimental', 'Control'];
 const MOMENTOS = ['Pretest', 'Postest'];
 const ROLES = ['1', '2', 'F'];
@@ -34,17 +48,6 @@ function eleccionFinal(reg, it) {
   return f.mantiene.includes(dec) ? ini : f.opuestos[ini];
 }
 const textoOpcion = (p, v) => { const o = (p.opciones || []).find((o) => o.v === v); return o ? o.t : (v ?? ''); };
-// Versión del instrumento con la que se aplicó un registro (los anteriores a la versión 2 no la traen: versión 1, pilotaje).
-const versionDe = (reg) => (reg && Number.isInteger(reg.version) ? reg.version : 1);
-const VERSION_ACTUAL = PC.version || 1;
-const LEGADO = (PC.versiones && PC.versiones.legado) || {};
-// Definición del ítem tal como se presentó en la versión del registro: para mostrar y calificar respuestas antiguas con sus
-// textos, opciones, uniones y claves originales (los puntajes automáticos ya quedaron guardados en el registro).
-function defVersion(it, reg) {
-  const v = versionDe(reg); if (v === VERSION_ACTUAL) return it;
-  const L = LEGADO[v]?.items?.[it.codigo]; return L ? { ...it, ...L } : it;
-}
-const nombreVersion = (reg) => { const v = versionDe(reg); return v === VERSION_ACTUAL ? '' : (LEGADO[v]?.nombre || `versión ${v}`); };
 // Valor de una parte en texto corto (tabla y Excel): letra, código de la opción, "A;C", o el texto escrito.
 function valorCorto(p, v) {
   if (vacio(v)) return '';
@@ -114,7 +117,7 @@ function columnasRespuestas(op = {}) {
   c('meta', 'Protocolo', 'Código de protocolo con el que se calificó la aplicación', (r) => r.protocolo || '');
   c('meta', 'Incompleta', 'Sí cuando la aplicación quedó incompleta (los ítems no alcanzados son dato faltante)', (r) => (r.incompleta ? 'Sí' : ''));
   c('meta', 'OrdenSituaciones', 'Orden en que se presentaron las situaciones (en el postest se barajan por bloques); vacío = orden del cuadernillo', (r) => (r.orden ? ordenNums(r).replace(/, /g, ',') : ''));
-  c('meta', 'VersionInstrumento', `Versión del instrumento con la que se aplicó (${VERSION_ACTUAL} = definitiva; 1 = versión del 11 de octubre usada en el pilotaje, con otras opciones y claves en los ítems 1, 7, 8, 11, 12, 13, 14 y 16)`, (r) => versionDe(r));
+  c('meta', 'VersionInstrumento', `Versión del instrumento con la que se aplicó (1 = ${nombreVersion(1)}, grupo Piloto; 2 = ${nombreVersion(2)}, Experimental y Control; difieren en nombres, opciones y claves de los ítems 1, 7, 8, 11, 12, 13, 14 y 16 y en las rúbricas)`, (r) => versionDe(r));
   if (op.meta) {
     c('meta', 'FechaHora', 'Fecha y hora de la aplicación', (r) => r.fecha_hora || r.fecha || '');
     c('meta', 'Aplicador', 'Quién aplicó la prueba', (r) => r.aplicador || '');

@@ -16,6 +16,7 @@ function activarTabs(cont, onChange) { cont.querySelectorAll('.gtabs button').fo
 const nom = (p) => [p.nombre, p.apellido].filter(Boolean).join(' ');
 const codigoUsado = (c) => D.participantes.some((p) => p.codigo === c) || (D.papelera || []).some((p) => p.codigo === c);
 const nombreDe = (c) => { const p = D.participantes.find((p) => p.codigo === c); return p ? nom(p) : ''; };
+const grupoDe = (c) => { const p = D.participantes.find((p) => p.codigo === c); return p ? p.grupo : ''; };
 const reg = (c, m) => regDe(D, c, m);
 const cal = (c, m) => calDe(D, c, m);
 const nReg = (c) => D.pc.filter((r) => r.codigo === c).length;
@@ -185,7 +186,7 @@ function fichaPrueba(codigo) {
   const obs = (r) => (r.observaciones ? ` · <i>${esc(r.observaciones)}</i>` : '');
   const meta = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<div class="meta"><span><b>${m}</b> sin aplicar</span><button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Aplicar ahora</button></div>`;
     const om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante');
-    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.incompleta ? ` · <b style="color:#B54E00">incompleta</b> (quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')})` : ''}${nombreVersion(r) ? ` · <span title="Se aplicó con una versión anterior del instrumento; se muestra y se califica con sus textos y claves originales">${esc(nombreVersion(r))}</span>` : ''}${obs(r)}${chipCal(codigo, m)}</span>${r.incompleta ? `<button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Continuar</button>` : ''}<button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
+    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.incompleta ? ` · <b style="color:#B54E00">incompleta</b> (quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')})` : ''}${versionDe(r) !== VERSION_ACTUAL ? ` · <span title="Versión del instrumento con la que se aplicó; se muestra y se califica con sus textos, opciones y claves">${esc(nombreVersion(versionDe(r)))}</span>` : ''}${obs(r)}${chipCal(codigo, m)}</span>${r.incompleta ? `<button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Continuar</button>` : ''}<button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
   const pend = regs.some((r, i) => r && S[i].total == null) ? '<p class="guia" style="margin:6px 0 0;font-size:.85em">Las sumas aparecen cuando la puntuación acordada está completa y ningún ítem queda sin oportunidad de respuesta.</p>' : '';
   return `<div class="prueba"><h3>${esc(PC.corto)}<span>${esc(PC.titulo)}</span></h3><table class="dims"><thead><tr><th></th><th>Pretest</th><th>Postest</th><th title="Postest menos pretest">Cambio</th></tr></thead><tbody>${filas}</tbody></table>${pend}${meta}</div>`;
 }
@@ -276,12 +277,12 @@ $('#btnStart').addEventListener('click', async () => {
   localStorage.setItem('aplicador', apl);
   const prev = reg(codigo, momento), a = leerAvance();
   if (a && a.codigo === codigo && a.momento === momento && (await dialogo({ titulo: 'Aplicación sin terminar', texto: 'Hay un avance guardado de esta misma aplicación en este dispositivo.', ok: 'Continuar donde iba', cancelar: 'Empezar de nuevo' }))) return startKid({ codigo, momento, aplicador: apl }, a);
-  if (prev && prev.incompleta && versionDe(prev) !== VERSION_ACTUAL) { // no se mezclan dos versiones del instrumento en una misma aplicación
-    if (!(await dialogo({ titulo: 'Aplicación incompleta de otra versión', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta, aplicada con la ${nombreVersion(prev)}. No se puede continuar con la versión actual del instrumento: solo es posible empezar de nuevo (se reemplaza lo guardado).`, ok: 'Empezar de nuevo', peligro: true }))) return;
+  if (prev && prev.incompleta && versionDe(prev) !== versionDeGrupo(grupoDe(codigo))) { // no se mezclan dos versiones del instrumento en una misma aplicación
+    if (!(await dialogo({ titulo: 'Aplicación incompleta de otra versión', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta, aplicada con la ${nombreVersion(versionDe(prev))}. Su grupo usa la ${nombreVersion(versionDeGrupo(grupoDe(codigo)))}, así que solo es posible empezar de nuevo (se reemplaza lo guardado).`, ok: 'Empezar de nuevo', peligro: true }))) return;
   } else if (prev && prev.incompleta) {
     const r = await dialogo({ titulo: 'Aplicación incompleta', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta (${prev.fecha_hora || prev.fecha}; quedó en el ítem ${ITEM[prev.interrumpida_en] ? (ITEM[prev.interrumpida_en].num || prev.interrumpida_en) : '?'}). Puede continuar desde donde quedó o empezar de nuevo (se reemplaza lo guardado).`, ok: 'Continuar donde quedó', otro: 'Empezar de nuevo', cancelar: 'Cancelar' });
     if (!r) return;
-    if (r === true) { m.innerHTML = ''; return startKid({ codigo, momento, aplicador: apl }, avanceDesdeRegistro(prev)); }
+    if (r === true) { m.innerHTML = ''; usarVersion(versionDeGrupo(grupoDe(codigo))); return startKid({ codigo, momento, aplicador: apl }, avanceDesdeRegistro(prev)); }
   } else if (prev && !(await dialogo({ titulo: 'Ya existe esta aplicación', texto: `${codigo} ${nombreDe(codigo)} ya tiene la prueba en ${momento} (${prev.fecha}). Si continúa, al guardar se reemplazará ese registro y se descartarán sus calificaciones.`, ok: 'Continuar y reemplazar', peligro: true }))) return;
   m.innerHTML = ''; startKid({ codigo, momento, aplicador: apl });
 });
@@ -311,24 +312,29 @@ function secuencia(orden) {
       g++;
       if (e === 0 && i === 0 && b.pausa_antes) seq.push({ tipo: 'pausa', g });
       seq.push({ tipo: 'etapa', sit, et, e, g });
-      for (const c of et.items) seq.push({ tipo: 'item', it: ITEM[c], sit, et, g });
+      for (const c of et.items) {
+        const it = ITEM[c], prev = seq[seq.length - 1];
+        if (it.junto_con && prev.tipo === 'item' && prev.it.codigo === it.junto_con) prev.mas = (prev.mas || []).concat(it); // misma pantalla que el ítem anterior (17+18, 19+20)
+        else seq.push({ tipo: 'item', it, sit, et, g });
+      }
     });
   });
   seq.push({ tipo: 'fin', g: g + 1 });
-  let pos = 0; for (const x of seq) if (x.tipo === 'item' && !x.prac && !x.it.auxiliar) x.pos = ++pos; // posición en el orden presentado
+  let pos = 0; for (const x of seq) if (x.tipo === 'item' && !x.prac) { if (!x.it.auxiliar) x.pos = ++pos; x.posMas = (x.mas || []).map(() => ++pos); } // posición en el orden presentado
   return seq;
 }
 // Avance reconstruido desde una aplicación incompleta guardada en el servidor: se continúa en la pregunta donde quedó.
 function avanceDesdeRegistro(r) {
   const orden = r.orden || ordenSituaciones(r.momento), seq = secuencia(orden), estado = { ...(r.estado || {}) };
   for (const c of r.pendientes || []) delete estado[c];
-  let i = seq.findIndex((x) => x.tipo === 'item' && x.it && x.it.codigo === r.interrumpida_en);
+  let i = seq.findIndex((x) => x.tipo === 'item' && x.it && itemsDe(x).some((it) => it.codigo === r.interrumpida_en));
   if (i < 0) i = seq.findIndex((x) => x.tipo === 'item' && x.it && (r.pendientes || []).includes(x.it.codigo));
   if (i < 0) i = seq.length - 1;
   while (i > 0 && seq[i - 1].tipo === 'etapa' && seq[i - 1].g === seq[i].g) i--; // retomar desde la portada de esa hoja
   return { orden, i, resp: r.respuestas || {}, estado, transcurrido: (r.duracion_seg || 0) * 1000, fecha_inicio: r.fecha };
 }
 function startKid(cfg, avance = null) {
+  usarVersion(cfg.version || versionDeGrupo(grupoDe(cfg.codigo))); // el Piloto se aplica con la versión 1; Experimental y Control, con la vigente
   const orden = (avance && avance.orden) || ordenSituaciones(cfg.momento), seq = secuencia(orden);
   K = { ...cfg, orden, seq, i: avance ? Math.min(avance.i, seq.length - 2) : 0, resp: avance ? avance.resp : {}, estado: avance ? avance.estado || {} : {}, pracResp: {}, t0: avance ? Date.now() - (avance.transcurrido || 0) : Date.now(), fecha_inicio: (avance && avance.fecha_inicio) || hoy() };
   $('#kTag').innerHTML = `<b>${esc(PC.corto)}</b> · ${esc(cfg.codigo)} ${esc(nombreDe(cfg.codigo))} · ${esc(cfg.momento)}`;
@@ -337,6 +343,8 @@ function startKid(cfg, avance = null) {
   renderKid();
 }
 const valorDe = (scr, k) => (scr.prac ? K.pracResp[k] : K.resp[k]);
+const itemsDe = (scr) => (scr.it ? [scr.it].concat(scr.mas || []) : []); // ítems de la pantalla (el principal y los que van junto a él)
+function parteDe(scr, k) { for (const it of itemsDe(scr)) { const p = it.partes.find((x) => it.codigo + x.id === k); if (p) return p; } return null; }
 function setValor(scr, k, v) { if (scr.prac) K.pracResp[k] = v; else K.resp[k] = v; guardarAvance(); actualizarNav(); }
 // Tema de color de la pantalla: cada situación tiene el suyo (y la práctica, la pausa y el final usan el azul claro).
 const TEMA_BASE = { color: '#3B9DF2', suave: '#E6F2FD', oscuro: '#1F6FC2', fondo: '#EEF6FE' };
@@ -354,8 +362,8 @@ function situacionHtml(scr) {
   return `<div class="k-sit ${(et && et.nueva_info) || largo > 330 ? 'larga' : ''}">${h}</div>`;
 }
 const letraDe = (i) => String.fromCharCode(65 + i);
-function parteHtml(scr, p) {
-  const it = scr.it, k = it.codigo + p.id, v = valorDe(scr, k), bloq = !scr.prac && K.estado[it.codigo];
+function parteHtml(scr, p, it = scr.it) {
+  const k = it.codigo + p.id, v = valorDe(scr, k), bloq = !scr.prac && K.estado[it.codigo];
   let h = `<div class="k-parte" data-k="${k}">`;
   if (p.intro) h += `<p class="intro">${esc(p.intro)}</p>`;
   if (p.pregunta) h += `<p class="q">${esc(p.pregunta)}</p>`;
@@ -363,7 +371,7 @@ function parteHtml(scr, p) {
   if (p.tipo === 'opcion') h += `<div class="opts ${p.compacto ? 'compacto fila-h' : ''}">${p.opciones.map((o, i) => `<button class="opt ${v === o.v ? 'sel' : ''}" data-opt="${k}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}>${p.letras ? `<span class="letra">${esc(o.v)}</span>` : '<span class="circ"></span>'}<span>${esc(o.t)}</span></button>`).join('')}</div>`;
   else if (p.tipo === 'multiple') h += `<div class="opts">${p.opciones.map((o) => `<button class="opt ${(v || []).includes(o.v) ? 'sel' : ''}" data-multi="${k}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}><span class="casilla">✓</span><span>${esc(o.t)}</span></button>`).join('')}</div><p class="cuenta" data-cuenta="${k}">${cuentaTxt(p, v)}</p>`;
   else if (p.tipo === 'union') h += `<ul class="leyenda">${p.opciones.map((o) => `<li><b class="letra l${esc(o.v).toLowerCase()}">${esc(o.v)}</b><span>${esc(o.t)}</span></li>`).join('')}</ul><div class="union">${p.filas.map((f) => `<div class="fila-u"><span class="quien">${esc(f.nombre)}</span><span class="flecha">→</span><div class="letras">${p.opciones.map((o) => `<button class="${(v || {})[f.id] === o.v ? 'sel' : ''}" data-union="${k}" data-f="${f.id}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}>${esc(o.v)}</button>`).join('')}</div></div>`).join('')}</div>`;
-  else if (p.tipo === 'texto') h += `<div class="k-texto">${p.prefijo ? `<p class="pref">${esc(p.prefijo)}…</p>` : ''}<textarea data-texto="${k}" rows="${p.lineas || 2}" placeholder="Escribe aquí" ${bloq ? 'disabled' : ''}>${esc(v || '')}</textarea></div>`;
+  else if (p.tipo === 'texto') h += `<div class="k-texto">${p.prefijo ? `<p class="pref">${esc(p.prefijo)}…</p>` : ''}<textarea data-texto="${k}" rows="${scr.mas && scr.mas.length ? 1 : (p.lineas || 2)}" placeholder="Escribe aquí" ${bloq ? 'disabled' : ''}>${esc(v || '')}</textarea></div>`;
   return h + '</div>';
 }
 const cuentaTxt = (p, v) => { const n = (v || []).length; return `Has marcado ${n} de ${p.n}.`; };
@@ -382,7 +390,7 @@ function renderKid() {
   $('#kNav').classList.remove('oculto'); $('#kSinResp').classList.add('oculto');
   $('#kBack').disabled = K.i === 0 || K.seq[K.i - 1].g < scr.g; // atrás solo dentro de la misma hoja
   $('#kNext').textContent = 'Siguiente'; $('#kNext').disabled = false;
-  body.className = 'kid-body' + (scr.tipo === 'item' ? '' : ' solo');
+  body.className = 'kid-body' + (scr.tipo === 'item' ? (scr.mas && scr.mas.length ? ' doble' : '') : ' solo');
   aplicarTema(scr.sit && scr.sit.tema ? scr.sit.tema : scr.prac ? PC.practica.tema : TEMA_BASE);
   if (scr.tipo === 'inicio') {
     $('#kCount').textContent = 'Inicio';
@@ -404,12 +412,15 @@ function renderKid() {
   } else if (scr.tipo === 'item') {
     const it = scr.it, dep = dependencia(scr);
     if (dep && !dep.ok && !K.estado[it.codigo]) { K.estado[it.codigo] = 'faltante'; guardarAvance(); }
-    const e = scr.prac ? null : K.estado[it.codigo];
-    const pos = scr.prac ? `Práctica ${scr.pracN} de ${PC.practica.items.length}` : it.num ? `Pregunta ${scr.pos} de ${PUNTUABLES.length}` : 'Elección inicial';
+    const e = scr.prac ? null : K.estado[it.codigo], mas = scr.mas || [];
+    const pos = scr.prac ? `Práctica ${scr.pracN} de ${PC.practica.items.length}` : it.num ? (mas.length ? `Preguntas ${[scr.pos].concat(scr.posMas).join(' y ')} de ${PUNTUABLES.length}` : `Pregunta ${scr.pos} de ${PUNTUABLES.length}`) : 'Elección inicial';
     $('#kCount').textContent = pos;
-    const tag = e ? `<span class="om ${e === 'faltante' ? 'falt' : ''}">${e === 'omitido' ? 'Sin respuesta: omitió' : 'Sin oportunidad: dato faltante'}</span>` : '';
-    body.innerHTML = situacionHtml(scr) + `<div class="k-preg"><p class="num"><span class="pos">${pos}</span><span class="it">${scr.prac ? 'No se guarda' : it.num ? `Ítem ${it.num}` : esc(it.etiqueta)}</span>${tag}</p>${dep ? dep.html : ''}${it.partes.map((p) => parteHtml(scr, p)).join('')}</div>`;
-    $('#kSinResp').classList.toggle('oculto', !!scr.prac); $('#kSinResp').textContent = e ? 'Quitar la marca y responder' : 'Sin respuesta';
+    const tagDe = (c) => { const e = K.estado[c]; return e ? `<span class="om ${e === 'faltante' ? 'falt' : ''}">${e === 'omitido' ? 'Sin respuesta: omitió' : 'Sin oportunidad: dato faltante'}</span>` : ''; };
+    const sinResp = (c) => (mas.length ? `<button class="lnk chico" data-sinresp="${c}">${K.estado[c] ? 'Quitar la marca y responder' : 'Sin respuesta'}</button>` : ''); // con varios ítems en pantalla, cada uno tiene su propio «Sin respuesta»
+    const tag = scr.prac ? '' : tagDe(it.codigo);
+    body.innerHTML = situacionHtml(scr) + `<div class="k-preg ${mas.length ? 'doble' : ''}"><p class="num"><span class="pos">${mas.length ? `Pregunta ${scr.pos}` : pos}</span><span class="it">${scr.prac ? 'No se guarda' : it.num ? `Ítem ${it.num}` : esc(it.etiqueta)}</span>${tag}${scr.prac ? '' : sinResp(it.codigo)}</p>${dep ? dep.html : ''}${it.partes.map((p) => parteHtml(scr, p)).join('')}` +
+      mas.map((m, j) => `<div class="k-mas"><p class="num"><span class="pos">Pregunta ${scr.posMas[j]}</span><span class="it">Ítem ${m.num}</span>${tagDe(m.codigo)}${sinResp(m.codigo)}</p>${m.partes.map((p) => parteHtml(scr, p, m)).join('')}</div>`).join('') + `</div>`;
+    $('#kSinResp').classList.toggle('oculto', !!scr.prac || mas.length > 0); $('#kSinResp').textContent = e ? 'Quitar la marca y responder' : 'Sin respuesta';
     if (K.i === K.seq.length - 2) $('#kNext').textContent = 'Terminar';
     actualizarNav();
     body.querySelector('.k-preg')?.scrollTo(0, 0);
@@ -418,30 +429,31 @@ function renderKid() {
 // Para avanzar hay que responder todas las partes del ítem (en «marca las dos», al menos dos marcas; en las uniones, todas las
 // filas; en los textos, algo escrito). La única excepción es que el aplicador registre el ítem como «Sin respuesta»
 // (omitió o sin oportunidad), que es la vía prevista por la guía de puntuación.
-function parteLista(scr, p) {
-  const v = valorDe(scr, scr.it.codigo + p.id); if (vacio(v)) return false;
+function parteLista(scr, p, it = scr.it) {
+  const v = valorDe(scr, it.codigo + p.id); if (vacio(v)) return false;
   if (p.tipo === 'multiple') return v.length >= (p.n || 1);
   if (p.tipo === 'union') return p.filas.every((f) => v[f.id]);
   if (p.tipo === 'texto') return String(v).trim().length > 0;
   return true;
 }
-function itemListo(scr) { const it = scr.it; if (!scr.prac && K.estado[it.codigo]) return true; return it.partes.every((p) => parteLista(scr, p)); }
+function itemListo(scr) { return itemsDe(scr).every((it) => (!scr.prac && K.estado[it.codigo]) || it.partes.every((p) => parteLista(scr, p, it))); }
 function actualizarNav() { const scr = K.seq[K.i]; if (scr.tipo === 'item') $('#kNext').disabled = !itemListo(scr); }
 $('#kBody').addEventListener('click', (e) => {
   const scr = K && K.seq[K.i]; if (!scr || scr.tipo !== 'item') return;
   const b = e.target.closest('button'); if (!b || b.disabled) return;
   if (b.dataset.opt) { setValor(scr, b.dataset.opt, b.dataset.v); b.parentElement.querySelectorAll('.opt').forEach((x) => x.classList.toggle('sel', x === b)); }
-  else if (b.dataset.multi) { const k = b.dataset.multi, p = scr.it.partes.find((x) => scr.it.codigo + x.id === k); let v = (valorDe(scr, k) || []).slice(); v = v.includes(b.dataset.v) ? v.filter((x) => x !== b.dataset.v) : p.opciones.map((o) => o.v).filter((x) => v.includes(x) || x === b.dataset.v); setValor(scr, k, v); b.classList.toggle('sel', v.includes(b.dataset.v)); $(`[data-cuenta="${k}"]`).textContent = cuentaTxt(p, v); }
+  else if (b.dataset.multi) { const k = b.dataset.multi, p = parteDe(scr, k); let v = (valorDe(scr, k) || []).slice(); v = v.includes(b.dataset.v) ? v.filter((x) => x !== b.dataset.v) : p.opciones.map((o) => o.v).filter((x) => v.includes(x) || x === b.dataset.v); setValor(scr, k, v); b.classList.toggle('sel', v.includes(b.dataset.v)); $(`[data-cuenta="${k}"]`).textContent = cuentaTxt(p, v); }
   else if (b.dataset.union) { const k = b.dataset.union, v = { ...(valorDe(scr, k) || {}) }; v[b.dataset.f] = b.dataset.v; setValor(scr, k, v); b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b)); }
 });
 $('#kBody').addEventListener('input', (e) => { const scr = K && K.seq[K.i]; if (!scr || scr.tipo !== 'item' || !e.target.dataset.texto) return; setValor(scr, e.target.dataset.texto, e.target.value); });
-$('#kSinResp').addEventListener('click', async () => {
-  const scr = K.seq[K.i], it = scr.it;
+$('#kSinResp').addEventListener('click', () => sinRespuesta(K.seq[K.i].it));
+$('#kBody').addEventListener('click', (e) => { const b = e.target.closest('[data-sinresp]'); if (b) sinRespuesta(ITEM[b.dataset.sinresp]); });
+async function sinRespuesta(it) {
   if (K.estado[it.codigo]) { delete K.estado[it.codigo]; guardarAvance(); renderKid(); return; }
   const r = await dialogo({ titulo: 'Sin respuesta', texto: `${it.num ? 'Ítem ' + it.num : it.etiqueta}. ¿Por qué no hay respuesta?\n\n• Omitió: recibió la tarea, tuvo tiempo y no respondió, o contestó «no sé» o «porque sí». Se califica con 0 y queda registrada la omisión.\n• Sin oportunidad: interrupción, error o tiempo insuficiente. Queda como dato faltante y no suma.`, ok: 'Omitió (tuvo oportunidad)', otro: 'Sin oportunidad', cancelar: 'Cancelar' });
   if (!r) return;
   K.estado[it.codigo] = r === 'otro' ? 'faltante' : 'omitido'; guardarAvance(); renderKid();
-});
+}
 $('#kNext').addEventListener('click', () => {
   const scr = K.seq[K.i];
   if (scr.tipo === 'item' && !itemListo(scr)) return; // no se avanza con partes sin responder
@@ -454,7 +466,7 @@ function guardarAvance() { if (!K) return; localStorage.setItem('avance', JSON.s
 // Sin conexión no pasa nada: el avance sigue en este dispositivo y la aplicación completa se envía al final (o queda en cola).
 let guardandoParcial = null;
 function filaParcial() {
-  const pend = K.seq.filter((x, j) => x.tipo === 'item' && !x.prac && j >= K.i).map((x) => x.it.codigo).filter((c) => !respondido(ITEM[c], K.resp) && !K.estado[c]);
+  const pend = K.seq.filter((x, j) => x.tipo === 'item' && !x.prac && j >= K.i).flatMap((x) => itemsDe(x).map((it) => it.codigo)).filter((c) => !respondido(ITEM[c], K.resp) && !K.estado[c]);
   const actual = K.seq[K.i], en = actual.tipo === 'item' && !actual.prac ? actual.it.codigo : (pend[0] || '');
   return { codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, duracion_seg: Math.round((Date.now() - K.t0) / 1000), fecha_inicio: K.fecha_inicio, respuestas: K.resp, estado: K.estado, ...(K.momento === 'Postest' ? { orden: K.orden } : {}), incompleta: true, pendientes: pend, interrumpida_en: en, observaciones: '' };
 }
@@ -482,7 +494,7 @@ document.addEventListener('keydown', (e) => {
   if (!enTexto && /^[1-4]$/.test(e.key)) { const b = $('#kBody').querySelectorAll('.opts button')[Number(e.key) - 1]; if (b && !b.disabled) b.click(); }
   else if (e.key === 'Enter' && (!enTexto || e.ctrlKey) && !$('#kNext').disabled && !$('#kNav').classList.contains('oculto')) { e.preventDefault(); $('#kNext').click(); }
 });
-function cerrarKid(guardado) { K = null; $('#kid').classList.add('oculto'); $('#app').classList.remove('oculto'); if (guardado && origen === 'estudiantes') { origen = null; vista = 'estudiantes'; } recargar(); }
+function cerrarKid(guardado) { K = null; usarVersion(VERSION_ACTUAL); $('#kid').classList.add('oculto'); $('#app').classList.remove('oculto'); if (guardado && origen === 'estudiantes') { origen = null; vista = 'estudiantes'; } recargar(); }
 function renderFin() {
   const { codigo, momento, resp, estado } = K, dur = Math.round((Date.now() - K.t0) / 1000);
   const auto = autoPuntajes(resp, estado), cerr = PUNTUABLES.filter(esCerrado), autoN = cerr.filter((it) => auto[it.codigo] != null), suma = autoN.reduce((s, it) => s + auto[it.codigo], 0);
@@ -620,7 +632,7 @@ function verProtocolo() {
       : `<div class="rubrica">${[2, 1, 0].map((n) => `<button data-pt="${it.codigo}" data-v="${n}" class="${puntos[it.codigo] === n ? 'sel' : ''}"><b>${n}</b><span>${esc(pu.niveles[n])}</span></button>`).join('')}${pu.nota ? `<p class="nota">${esc(pu.nota)}</p>` : ''}${ejemplosHtml(r, it)}</div>`;
     return `<div class="cal-item" data-item="${it.codigo}">${cabItem(r, it)}${respuestaHtml(r, it)}${der}</div>`;
   };
-  const ver = nombreVersion(r) ? `<p class="aviso" style="margin:0 0 10px">Este protocolo se aplicó con la <b>${esc(nombreVersion(r))}</b>: las respuestas se muestran con los textos, opciones y claves de esa versión. Califique con la rúbrica vigente.</p>` : '';
+  const ver = versionDe(r) !== VERSION_ACTUAL ? `<p class="aviso" style="margin:0 0 10px">Este protocolo se aplicó con la <b>${esc(nombreVersion(versionDe(r)))}</b>: las respuestas y las claves de los ítems cerrados son las de esa versión. La rúbrica de calificación es la misma para todos los grupos.</p>` : '';
   const pinta = () => { const h = hechos(r, { puntos }), n = nRub(r); $('#cAvance').innerHTML = `<span>${h} de ${n} ítems puntuados</span><div class="barra"><i style="width:${n ? 100 * h / n : 0}%"></i></div>`; };
   $('#calCuerpo').innerHTML = `<div class="cal-prot"><div><h3>Protocolo ${esc(r.protocolo)}</h3><span class="sub">Calificador ${rol}${nombreCal(rol) ? ': ' + esc(nombreCal(rol)) : ''} · aplicado el ${esc(r.fecha)}${C ? ' · calificación guardada el ' + esc(C.fecha) : ''}</span></div><div class="avance" id="cAvance"></div><button class="lnk chico" id="cVolver">← Volver a la lista</button></div>` +
     `<p class="guia">Lea la respuesta del estudiante y elija el nivel de la rúbrica (2, 1 o 0). El 0 es solo para la omisión («no sé», «porque sí») o la respuesta sin relación con la pregunta; cualquier otro intento recibe al menos 1. Los ítems cerrados ya están calificados con la clave. Puede guardar a medias y continuar después.</p>` + ver +

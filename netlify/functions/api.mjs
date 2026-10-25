@@ -5,6 +5,9 @@ import { getStore } from "@netlify/blobs";
 import INS from "../lib/instrumentos.mjs";
 
 const PC = INS.PC;
+// Dos versiones del instrumento: la vigente (PC, Experimental y Control) y la del 11 de octubre (PC_v1, grupo Piloto).
+const DEFS = { 2: INS.PC, 1: INS.PC_v1 };
+const versionDeGrupo = (g) => (PC.versiones && PC.versiones.por_grupo && PC.versiones.por_grupo[g]) || PC.version || 2;
 const STORES = ["participantes", "pc", "calif"];
 const REGS = ["pc", "calif"]; // almacenes con registros por estudiante
 const ROLES = ["1", "2", "F"]; // calificador 1, calificador 2, puntuación final acordada
@@ -63,15 +66,16 @@ async function bitacora(evento, detalle) {
 }
 
 /* ---------- lógica del instrumento (la misma que en public/assets/comun.js) ---------- */
-const ITEMS = PC.items, ITEM = Object.fromEntries(ITEMS.map((i) => [i.codigo, i]));
+// Los códigos de ítem, las partes y las habilidades son los mismos en las dos versiones; difieren textos, opciones, claves y rúbricas.
+const ITEMS = PC.items;
 const PUNTUABLES = ITEMS.filter((i) => !i.auxiliar);
 const esCerrado = (it) => it.puntuacion.tipo.startsWith("clave");
 const RUBRICA = PUNTUABLES.filter((i) => i.puntuacion.tipo === "rubrica");
 const vacio = (v) => v == null || v === "" || (Array.isArray(v) && !v.length) || (typeof v === "object" && !Array.isArray(v) && !Object.values(v).some((x) => x));
 // Limpia las respuestas: solo claves conocidas y valores válidos para cada tipo de parte.
-function normalizarRespuestas(r) {
+function normalizarRespuestas(r, def = PC) {
   const out = {}; r = r && typeof r === "object" ? r : {};
-  for (const it of ITEMS) for (const p of it.partes) {
+  for (const it of def.items) for (const p of it.partes) {
     const k = it.codigo + p.id, v = r[k];
     if (p.tipo === "opcion") { if (p.opciones.some((o) => o.v === v)) out[k] = v; }
     else if (p.tipo === "multiple") { if (Array.isArray(v)) { const m = p.opciones.map((o) => o.v).filter((x) => v.includes(x)); if (m.length) out[k] = m; } }
@@ -83,27 +87,27 @@ function normalizarRespuestas(r) {
 const respondido = (it, resp) => it.partes.some((p) => !vacio(resp[it.codigo + p.id]));
 // Estado de cada ítem: "omitido" (tuvo oportunidad y no respondió: 0 puntos) o "faltante" (sin oportunidad: dato faltante).
 // Un ítem sin respuesta y sin estado queda como omitido. El ítem 8 sin la elección del 5 queda faltante (regla de la guía).
-function normalizarEstado(e, resp, pendientes = []) {
+function normalizarEstado(e, resp, pendientes = [], def = PC) {
   const out = {}; e = e && typeof e === "object" ? e : {};
-  for (const it of ITEMS) {
+  for (const it of def.items) {
     if (e[it.codigo] === "faltante" || pendientes.includes(it.codigo)) out[it.codigo] = "faltante"; // los pendientes de una aplicación incompleta no se alcanzaron: dato faltante
     else if (e[it.codigo] === "omitido" || !respondido(it, resp)) out[it.codigo] = "omitido";
   }
-  for (const it of PUNTUABLES) if (it.puntuacion.tipo === "clave_condicional") {
+  for (const it of def.items) if (it.puntuacion.tipo === "clave_condicional") {
     const d = it.puntuacion.depende; if (vacio(resp[d.item + d.parte]) || out[d.item]) out[it.codigo] = "faltante";
   }
   return out;
 }
-function normalizarEscriba(e) {
+function normalizarEscriba(e, def = PC) {
   const out = {}; e = e && typeof e === "object" ? e : {};
-  for (const it of ITEMS) for (const p of it.partes) if (p.tipo === "texto" && e[it.codigo + p.id] === "aplicador") out[it.codigo + p.id] = "aplicador";
+  for (const it of def.items) for (const p of it.partes) if (p.tipo === "texto" && e[it.codigo + p.id] === "aplicador") out[it.codigo + p.id] = "aplicador";
   return out;
 }
 // Puntaje automático de los ítems cerrados (0 o 2 por la clave; el 8 según la elección del 5).
-function autoPuntajes(resp, estado) {
+function autoPuntajes(resp, estado, def = PC) {
   const auto = {};
-  for (const it of PUNTUABLES) {
-    if (!esCerrado(it) || estado[it.codigo] === "faltante") continue;
+  for (const it of def.items) {
+    if (it.auxiliar || !esCerrado(it) || estado[it.codigo] === "faltante") continue;
     if (estado[it.codigo] === "omitido") { auto[it.codigo] = 0; continue; }
     const pu = it.puntuacion, v = resp[it.codigo + pu.parte];
     const clave = pu.tipo === "clave" ? pu.clave : pu.claves[resp[pu.depende.item + pu.depende.parte]];
@@ -233,17 +237,19 @@ export default async (req) => {
   if (ruta === "registro" && req.method === "PUT") { // una aplicación de la prueba (pretest o postest)
     const r = body.row || {}, codigo = String(r.codigo || "").toUpperCase(), momento = r.momento;
     if (!MOMENTOS.includes(momento)) return json({ error: "Momento inválido" }, 400);
-    if (!(await store("participantes").get(codigo, { type: "json" }))) return json({ error: "Estudiante no registrado" }, 404);
+    const part = await store("participantes").get(codigo, { type: "json" });
+    if (!part) return json({ error: "Estudiante no registrado" }, 404);
+    const version = versionDeGrupo(part.grupo), def = DEFS[version] || PC; // el Piloto se aplica y se califica con la versión 1
     // Aplicación incompleta (el aplicador salió o se cerró el navegador): se guarda lo respondido; los ítems no alcanzados ("pendientes")
     // quedan como dato faltante, y la aplicación se puede continuar después desde donde quedó (interrumpida_en).
     const incompleta = r.incompleta === true, codigos = ITEMS.map((it) => it.codigo);
     const pendientes = incompleta && Array.isArray(r.pendientes) ? r.pendientes.filter((c) => codigos.includes(c)) : [];
-    const respuestas = normalizarRespuestas(r.respuestas), estado = normalizarEstado(r.estado, respuestas, pendientes), escriba = normalizarEscriba(r.escriba);
+    const respuestas = normalizarRespuestas(r.respuestas, def), estado = normalizarEstado(r.estado, respuestas, pendientes, def), escriba = normalizarEscriba(r.escriba, def);
     const nResp = ITEMS.filter((it) => respondido(it, respuestas)).length;
     if (!nResp && !Object.values(estado).includes("faltante")) return json({ error: "La aplicación no tiene ninguna respuesta" }, 400);
     const row = { codigo, momento, fecha: r.fecha_inicio || hoy(), fecha_hora: ahora(), aplicador: String(r.aplicador || "").slice(0, 80), duracion_seg: Number(r.duracion_seg) || 0, protocolo: await protocoloDe(secreto, codigo, momento),
-      version: PC.version || 1, // versión del instrumento con la que se aplicó (los textos, claves y puntajes automáticos quedan ligados a ella)
-      respuestas, estado, escriba, auto: autoPuntajes(respuestas, estado), ...(ordenValido(r.orden) ? { orden: r.orden } : {}),
+      version, // versión del instrumento con la que se aplicó (textos, claves y puntajes automáticos quedan ligados a ella)
+      respuestas, estado, escriba, auto: autoPuntajes(respuestas, estado, def), ...(ordenValido(r.orden) ? { orden: r.orden } : {}),
       ...(incompleta ? { incompleta: true, pendientes, interrumpida_en: codigos.includes(r.interrumpida_en) ? r.interrumpida_en : pendientes[0] || "" } : {}), observaciones: String(r.observaciones || "").slice(0, 800) };
     const k = llave(codigo, momento);
     const previo = await store("pc").get(k, { type: "json" });
