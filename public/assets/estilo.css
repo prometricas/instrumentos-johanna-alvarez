@@ -78,6 +78,24 @@ table.datos tr:last-child td{border-bottom:0}
 .estado.pend{cursor:pointer} .estado.pend:hover{background:var(--azul-suave);color:var(--azul);border-color:#B9C8EE}
 .estado.medio{background:var(--pend-suave);color:#B54E00;cursor:pointer} .estado.medio:hover{background:#FFE4CC;border-color:#F8CFA8}
 .estado.nada{color:#A4ACBC;cursor:default;margin-right:6px}
+/* estado de cada prueba en la tabla de estudiantes: sin empezar (Aplicar), en curso (progreso + Continuar) o completa */
+table.datos.est td{padding:8px 12px} table.datos.est td.apl-td{padding:6px 10px;min-width:150px}
+.apl{font:inherit;cursor:pointer;border-radius:10px;text-align:left}
+.apl.pend{background:#fff;border:1.5px dashed #B9C8EE;color:var(--azul);padding:7px 14px;font-weight:700;font-size:.88em}
+.apl.pend:hover{background:var(--azul-suave);border-style:solid}
+.apl.curso{display:flex;flex-direction:column;gap:4px;width:100%;background:var(--pend-suave);border:1.5px solid #F8CFA8;color:#7A3B00;padding:6px 10px 7px;line-height:1.2}
+.apl.curso:hover{background:#FFE4CC;border-color:#F0B27A}
+.apl.curso .cifras{font-size:.8em;white-space:nowrap} .apl.curso .cifras b{font-size:1.15em;color:#B54E00}
+.apl.curso .barra{display:block;height:5px;border-radius:3px;background:#FBE0C6;overflow:hidden} .apl.curso .barra i{display:block;height:100%;background:#F36A00;border-radius:3px}
+.apl.curso .sigue{font-size:.82em;font-weight:800;color:#B54E00}
+.estado.si{white-space:nowrap}
+.cal-est{font-weight:800;border-radius:6px;padding:1px 7px} .cal-est.pend{color:#B42318;background:#FDECEA} .cal-est.ok{color:var(--ok);background:var(--ok-suave)}
+details.registro{padding:10px 18px 12px} details.registro[open]{padding-bottom:18px}
+details.registro summary{cursor:pointer;font-weight:700;color:var(--azul);list-style:none;display:flex;align-items:center;gap:8px;user-select:none}
+details.registro summary::-webkit-details-marker{display:none}
+details.registro summary .mas{display:inline-flex;align-items:center;justify-content:center;width:24px;height:24px;border-radius:50%;background:var(--azul-suave);font-size:1.05em}
+details.registro[open] summary .mas{background:var(--azul);color:#fff}
+details.registro .fila{row-gap:8px} details.registro .fila .campo{min-width:120px}
 .lnk.chico{padding:3px 8px;font-size:.88em;font-weight:500} .lnk.mal{color:var(--mal)} .lnk.mal:hover{background:var(--mal-suave)}
 .x{background:none;border:0;color:var(--tinta-2);font-size:1.3em;line-height:1;padding:4px 8px;border-radius:8px}
 .x:hover{color:var(--mal);background:var(--mal-suave)}
@@ -127,8 +145,15 @@ table.datos tr:last-child td{border-bottom:0}
 .kid-top{display:flex;align-items:center;gap:14px;padding:7px clamp(14px,2.4vw,28px);background:#fff;border-bottom:4px solid var(--k);font-size:.86em;color:var(--tinta-2);min-height:50px;transition:border-color .3s}
 .kid-top img{height:28px;width:auto}
 .kid-top .tag{white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:34vw} .kid-top .tag b{color:var(--k-oscuro)}
-.kid-top .prog{flex:1;height:14px;background:#EEF1F6;border-radius:999px;overflow:hidden;min-width:80px}
-.kid-top .prog i{display:block;height:100%;background:linear-gradient(90deg,#FF7A59,#F5A623,#3DB561,#1BA8A0,#3B9DF2,#8E5BE8);width:0;transition:width .3s;border-radius:999px}
+.kid-top .prog{flex:1;display:flex;gap:4px;min-width:120px;height:18px;align-items:stretch}
+.kid-top .prog .s{position:relative;flex:1;border-radius:999px;background:#EEF1F6;overflow:hidden;min-width:22px;border:2px solid transparent;transition:box-shadow .3s}
+.kid-top .prog .s.bloque{margin-left:10px}
+.kid-top .prog .s i{display:block;height:100%;background:var(--c);width:0;transition:width .35s;border-radius:999px;opacity:.9}
+.kid-top .prog .s b{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;font-size:10px;font-weight:900;color:var(--k-oscuro);mix-blend-mode:multiply;letter-spacing:.02em}
+.kid-top .prog .s.lista b{color:#fff;mix-blend-mode:normal}
+.kid-top .prog .s.actual{box-shadow:0 0 0 2px #fff,0 0 0 4px var(--c)}
+.kid-top .prog .s.actual b{animation:prog-late 1.6s ease-in-out infinite}
+@keyframes prog-late{0%,100%{transform:scale(1)}50%{transform:scale(1.25)}}
 .kid-top #kCount{white-space:nowrap;font-variant-numeric:tabular-nums;font-weight:800;color:#fff;background:var(--k);border-radius:999px;padding:4px 14px;font-size:.95em;transition:background .3s}
 .kid-top button#kExit{background:#fff;border:1.5px solid var(--linea);border-radius:10px;padding:7px 12px;font:inherit;font-weight:700}
 .kid-body{flex:1;min-height:0;display:grid;grid-template-columns:minmax(280px,5fr) minmax(0,8fr);gap:clamp(10px,1.4vw,18px);padding:clamp(10px,1.4vh,16px) clamp(14px,2vw,26px)}
@@ -150,17 +175,29 @@ table.datos tr:last-child td{border-bottom:0}
 .k-preg .num .pos{background:var(--k);color:#fff;border-radius:999px;padding:3px 14px;font-weight:900;font-size:.9em}
 .k-preg .num .it{color:var(--tinta-2);font-size:.82em;font-weight:700}
 .k-preg .num .lnk.chico{margin-left:auto;font-size:.8em;color:var(--tinta-2)}
-.k-mas{border-top:3px dashed var(--k-suave);padding-top:8px;display:flex;flex-direction:column;gap:6px}
 /* dos ítems en una pantalla (17+18, 19+20): columna de preguntas más ancha y todo más compacto, para que quepa sin desplazarse */
 .kid-body.doble{grid-template-columns:minmax(260px,4fr) minmax(0,9fr)}
-.k-preg.doble{gap:6px;padding-top:10px;padding-bottom:10px}
-.k-preg.doble .q,.k-preg.doble .intro{margin:0;font-size:clamp(14.5px,1.05vw,17.5px)}
-.k-preg.doble .opt{min-height:40px;padding:5px 12px;font-size:clamp(14.5px,1.05vw,17.5px);border-radius:12px}
-.k-preg.doble .opts{gap:6px}
-.k-preg.doble .k-texto{gap:4px} .k-preg.doble .k-texto .pref{font-size:clamp(14.5px,1.05vw,17.5px)}
-.k-preg.doble .k-texto textarea{min-height:42px;padding:6px 12px;font-size:clamp(15px,1.1vw,18px)}
-.k-preg.doble .k-dep{padding:4px 12px;font-size:clamp(14px,1vw,16.5px)}
-.k-preg.doble .num .pos{font-size:.84em;padding:2px 12px}
+.k-preg .k-item{display:contents}
+.k-cerrada{background:var(--fondo);color:var(--tinta-2);border-radius:12px;padding:8px 14px;font-size:.92em;font-weight:700}
+.k-preg.doble .k-item,.k-preg.doble .k-mas{display:flex;flex-direction:column;gap:clamp(8px,1.2vh,14px);min-width:0}
+.k-preg.doble .k-mas{border-top:3px dashed var(--k-suave);padding-top:clamp(10px,1.4vh,16px)}
+@media (min-width:1500px) and (min-height:700px){ /* pantallas anchas: las dos preguntas lado a lado, con la historia más angosta */
+  .kid-body.doble{grid-template-columns:minmax(280px,3fr) minmax(0,10fr)}
+  .k-preg.doble{display:grid;grid-template-columns:1fr 1fr;grid-template-rows:auto 1fr;gap:12px 28px;align-content:start}
+  .k-preg.doble .k-cerrada{grid-column:1/-1}
+  .k-preg.doble .k-mas{border-top:0;border-left:3px dashed var(--k-suave);padding-top:0;padding-left:26px}
+}
+@media (max-height:819px){ /* portátiles: compactas y apiladas, para que quepan sin desplazarse */
+  .k-preg.doble{gap:6px;padding-top:10px;padding-bottom:10px}
+  .k-preg.doble .k-item,.k-preg.doble .k-mas{gap:6px} .k-preg.doble .k-mas{padding-top:8px}
+  .k-preg.doble .q,.k-preg.doble .intro{margin:0;font-size:clamp(14.5px,1.05vw,17.5px)}
+  .k-preg.doble .opt{min-height:40px;padding:5px 12px;font-size:clamp(14.5px,1.05vw,17.5px);border-radius:12px}
+  .k-preg.doble .opts{gap:6px}
+  .k-preg.doble .k-texto{gap:4px} .k-preg.doble .k-texto .pref{font-size:clamp(14.5px,1.05vw,17.5px)}
+  .k-preg.doble .k-texto textarea{min-height:42px;padding:6px 12px;font-size:clamp(15px,1.1vw,18px)}
+  .k-preg.doble .k-dep{padding:4px 12px;font-size:clamp(14px,1vw,16.5px)}
+  .k-preg.doble .num .pos{font-size:.84em;padding:2px 12px}
+}
 .k-preg .num .om{background:#FFE4CC;color:#B54E00;border-radius:999px;padding:3px 12px;font-weight:800;font-size:.82em} .k-preg .num .om.falt{background:#EEF1F6;color:var(--tinta-2)}
 .k-parte{display:flex;flex-direction:column;gap:6px}
 .k-parte .intro{font-size:clamp(15.5px,1.1vw,18.5px);color:#394150;margin:0;line-height:1.4;font-weight:600}

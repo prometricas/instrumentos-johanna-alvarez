@@ -82,6 +82,16 @@ function autoPuntajes(resp, estado) {
   }
   return auto;
 }
+// Progreso de una prueba: preguntas respondidas (o con estado) de las 20 y situaciones completas de las 6, según la versión.
+function progresoDe(resp, estado, v = VERSION_ACTUAL) {
+  const d = DEFS[v] || PC, por = Object.fromEntries(d.items.map((i) => [i.codigo, i])), punt = d.items.filter((i) => !i.auxiliar);
+  const hecho = (it) => !!it && (it.partes.some((p) => !vacio(resp[it.codigo + p.id])) || !!estado[it.codigo]);
+  const n = punt.filter(hecho).length;
+  const sits = d.situaciones.filter((s) => s.etapas.every((et) => et.items.every((c) => hecho(por[c])))).length;
+  return { n, total: punt.length, sits, totalSits: d.situaciones.length };
+}
+// En una aplicación en curso guardada en el servidor, los ítems pendientes figuran como «faltante» para el análisis, pero no cuentan como respondidos.
+function progresoReg(r) { const est = { ...(r.estado || {}) }; for (const c of r.pendientes || []) delete est[c]; return progresoDe(r.respuestas || {}, est, versionDe(r)); }
 const listaNum = (reg, estado) => PUNTUABLES.filter((it) => reg.estado?.[it.codigo] === estado).map((it) => it.num).join(', ');
 // Estado de la calificación de una aplicación: pendiente (nadie), parcial (uno de los dos), doble (los dos, sin acuerdo), completa (acordada)
 function estadoCalif(cal) {
@@ -132,8 +142,8 @@ function columnasRespuestas(op = {}) {
   }
   if (op.calif) {
     for (const rol of ['1', '2']) for (const it of RUBRICA) c('calif', `C${rol}_${z(it.num)}`, `Calificador ${rol} · ítem ${it.num}`, (r, cal) => cal[rol]?.puntos?.[it.codigo] ?? '');
-    c('calif', 'Calificador1', 'Nombre del calificador 1', (r, cal) => cal['1']?.calificador || '');
-    c('calif', 'Calificador2', 'Nombre del calificador 2', (r, cal) => cal['2']?.calificador || '');
+    c('calif', 'Calificador1', 'Calificador 1 (fecha de su calificación completa)', (r, cal) => (cal['1']?.completa ? cal['1'].fecha : ''));
+    c('calif', 'Calificador2', 'Calificador 2 (fecha de su calificación completa)', (r, cal) => (cal['2']?.completa ? cal['2'].fecha : ''));
     c('calif', 'Acuerdo', 'Fecha de la puntuación acordada', (r, cal) => (cal.F?.completa ? cal.F.fecha : ''));
   }
   if (op.resp !== false) {

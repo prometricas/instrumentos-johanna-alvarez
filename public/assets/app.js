@@ -34,7 +34,6 @@ async function entrar(clave) {
   $('#entrada').classList.add('oculto'); $('#app').classList.remove('oculto');
   ir(VISTAS[location.hash.slice(1)] ? location.hash.slice(1) : 'estudiantes');
   pintarCola(); enviarCola();
-  if (leerAvance() && vista !== 'aplicar') toast('Hay una aplicación sin terminar guardada en este dispositivo (en Aplicar al estudiante)');
 }
 $('#btnEntrar').addEventListener('click', async () => {
   const c = $('#clave').value; if (!c) return;
@@ -50,35 +49,37 @@ async function cargar() {
   finally { $('#cargando').classList.add('oculto'); }
 }
 /* ---------- diálogo propio (reemplaza confirm/prompt del navegador); "otro" añade un tercer botón ---------- */
-function dialogo({ titulo, texto, ok = 'Aceptar', cancelar = 'Cancelar', otro = null, peligro = false, escribir = null }) {
+// escribir: texto que hay que teclear para confirmar (borrados). pedir: {label, valor} pide un dato libre y resuelve con él.
+function dialogo({ titulo, texto, ok = 'Aceptar', cancelar = 'Cancelar', otro = null, peligro = false, escribir = null, pedir = null }) {
   return new Promise((res) => {
     $('#dTitulo').textContent = titulo; $('#dTexto').textContent = texto;
-    $('#dCampo').classList.toggle('oculto', !escribir); $('#dCampo').classList.remove('falta'); $('#dInput').value = '';
-    if (escribir) $('#dLabel').textContent = `Para confirmar, escriba ${escribir}`;
+    $('#dCampo').classList.toggle('oculto', !escribir && !pedir); $('#dCampo').classList.remove('falta'); $('#dInput').value = pedir ? (pedir.valor || '') : ''; $('#dInput').placeholder = pedir ? (pedir.placeholder || '') : '';
+    if (escribir) $('#dLabel').textContent = `Para confirmar, escriba ${escribir}`; else if (pedir) $('#dLabel').textContent = pedir.label;
     $('#dOk').textContent = ok; $('#dOk').className = 'btn' + (peligro ? ' peligro' : ''); $('#dCancelar').textContent = cancelar;
     $('#dOtro').classList.toggle('oculto', !otro); if (otro) $('#dOtro').textContent = otro;
     $('#dialogo').classList.remove('oculto');
-    const coincide = () => !escribir || $('#dInput').value.trim().toUpperCase() === escribir.toUpperCase();
+    const coincide = () => (escribir ? $('#dInput').value.trim().toUpperCase() === escribir.toUpperCase() : pedir ? $('#dInput').value.trim().length > 0 : true);
+    const valor = () => (pedir ? $('#dInput').value.trim() : true);
     const fin = (v) => { $('#dialogo').classList.add('oculto'); $('#dOk').onclick = $('#dCancelar').onclick = $('#dOtro').onclick = null; document.removeEventListener('keydown', tecla, true); res(v); };
-    const tecla = (e) => { if (e.key === 'Escape') { e.stopPropagation(); fin(false); } else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.stopPropagation(); if (coincide()) fin(true); else $('#dCampo').classList.add('falta'); } };
-    $('#dOk').onclick = () => { if (!coincide()) { $('#dCampo').classList.add('falta'); $('#dInput').focus(); return; } fin(true); };
+    const tecla = (e) => { if (e.key === 'Escape') { e.stopPropagation(); fin(false); } else if (e.key === 'Enter' && e.target.tagName !== 'TEXTAREA') { e.stopPropagation(); if (coincide()) fin(valor()); else $('#dCampo').classList.add('falta'); } };
+    $('#dOk').onclick = () => { if (!coincide()) { $('#dCampo').classList.add('falta'); $('#dInput').focus(); return; } fin(valor()); };
     $('#dCancelar').onclick = () => fin(false);
     $('#dOtro').onclick = () => fin('otro');
     document.addEventListener('keydown', tecla, true);
-    (escribir ? $('#dInput') : $('#dOk')).focus();
+    (escribir || pedir ? $('#dInput') : $('#dOk')).focus(); if (pedir) $('#dInput').select();
   });
 }
 $('#dialogo').addEventListener('click', (e) => { if (e.target === $('#dialogo')) $('#dCancelar').click(); });
 
 /* ---------- navegación ---------- */
-const VISTAS = { estudiantes: () => verEstudiantes(), aplicar: () => verAplicar(), calificar: () => verCalificar(), respuestas: () => verRespuestas() };
+const VISTAS = { estudiantes: () => verEstudiantes(), calificar: () => verCalificar(), respuestas: () => verRespuestas() };
 let origen = null; // módulo desde el que se llegó con una marca pendiente, para poder volver
 function ir(v) {
   vista = v;
   document.querySelectorAll('main > section').forEach((s) => s.classList.toggle('oculto', s.id !== 'v-' + v));
   document.querySelectorAll('nav.menu button[data-v]').forEach((b) => b.classList.toggle('activo', b.dataset.v === v));
   document.querySelectorAll('[data-volver]').forEach((a) => a.classList.toggle('oculto', !(origen && origen !== v)));
-  $('#ayudaBtn').classList.toggle('oculto', v !== 'aplicar'); if (v !== 'aplicar') $('#ayudaPanel').classList.add('oculto');
+  $('#ayudaBtn').classList.toggle('oculto', v !== 'estudiantes'); if (v !== 'estudiantes') $('#ayudaPanel').classList.add('oculto');
   if (!location.hash) history.replaceState(null, '', '#' + v); else if (location.hash !== '#' + v) history.pushState(null, '', '#' + v); // el botón Atrás del navegador vuelve al módulo anterior
   VISTAS[v]();
 }
@@ -86,7 +87,7 @@ document.querySelectorAll('nav.menu button[data-v]').forEach((b) => b.addEventLi
 $('#logoInicio').addEventListener('click', (e) => { e.preventDefault(); if (D) { origen = null; ir('estudiantes'); } }); // el logo lleva a Estudiantes
 document.querySelectorAll('[data-volver]').forEach((a) => a.addEventListener('click', (e) => { e.preventDefault(); const o = origen; origen = null; ir(o); }));
 window.addEventListener('popstate', () => {
-  if (K) { history.pushState(null, '', '#aplicar'); return; } // durante una aplicación, Atrás no hace nada
+  if (K) { history.pushState(null, '', '#estudiantes'); return; } // durante una aplicación, Atrás no hace nada
   const v = location.hash.slice(1); if (VISTAS[v] && D) { origen = null; if (v === 'calificar') calVista = 'lista'; ir(v); }
 });
 async function recargar() { try { await cargar(); ir(vista); } catch (e) { toast(e.message, true); } }
@@ -94,30 +95,54 @@ function seg(id, onChange) { const el = $(id); el.querySelectorAll('button').for
 function guionHtml() { return `<h4>Guion · ${esc(PC.corto)}</h4><p>Diga al niño(a): <i>«${esc(PC.guion.diga)}»</i></p><p>${esc(PC.guion.haga)}</p><p>${esc(PC.guion.etapas)}</p><p class="teclas">Teclas: 1-4 marcan la opción, Enter avanza (en un cuadro de texto, Ctrl+Enter).</p>`; }
 
 /* ---------- estudiantes ---------- */
+// La prueba se aplica en varias sesiones, en distintos días: cada prueba está «sin empezar», «en curso» (se continúa en la
+// misma pregunta, sin avisos) o «completa». Todo se maneja desde esta tabla y desde la ficha.
 const ET = { Pretest: 'Pre', Postest: 'Post' };
+const SX = { Femenino: 'F', Masculino: 'M' };
+// Avance guardado en este dispositivo (tras cada clic) para una prueba: sirve si va más adelante que lo guardado en el servidor.
+function avanceLocal(c, m) { const a = leerAvance(); return a && a.codigo === c && a.momento === m ? a : null; }
+// Estado de una prueba: {estado: 'sin' | 'curso' | 'completa', prog, en (pregunta en la que sigue), fecha, local (true si el avance de este dispositivo va más adelante)}
+function estadoPrueba(c, m) {
+  const r = reg(c, m), a = avanceLocal(c, m), v = versionDeGrupo(grupoDe(c));
+  if (r && !r.incompleta) { if (a) localStorage.removeItem('avance'); return { estado: 'completa', fecha: r.fecha_hora || r.fecha, r }; } // la prueba completa manda; un avance local viejo sobra
+  const pr = r ? progresoReg(r) : null, pl = a ? progresoDe(a.resp, a.estado || {}, v) : null;
+  if (!pr && !pl) return { estado: 'sin' };
+  const local = !!pl && (!pr || pl.n >= pr.n);
+  const en = local ? a.en : r.interrumpida_en, def = DEFS[v] || PC, it = en ? def.items.find((x) => x.codigo === en) : null;
+  return { estado: 'curso', prog: local ? pl : pr, en: it ? (it.num ? `pregunta ${it.num}` : 'la elección inicial de la situación ' + (def.situaciones.find((x) => x.id === it.situacion) || {}).num) : '', fecha: local ? a.fecha : (r.fecha_hora || r.fecha), local, r, a };
+}
+const txtProg = (e) => `${e.prog.n} de ${e.prog.total} preguntas · ${e.prog.sits} de ${e.prog.totalSits} situaciones completas${e.en ? ` · sigue en la ${e.en}` : ''}${e.fecha ? ` · última sesión ${e.fecha}` : ''}`;
 function verEstudiantes() {
   const ps = D.participantes;
   $('#resumenP').textContent = ps.length ? `${ps.length} estudiante${ps.length > 1 ? 's' : ''} · ` + porGrupo(ps).map(([g, l]) => `${l.length} ${g.toLowerCase()}`).join(' · ') : '';
-  const marcaApl = (c, m) => { const r = reg(c, m); return r ? (r.incompleta ? `<span class="estado medio" role="button" tabindex="0" data-apl="${esc(c)}" data-m="${m}" title="Incompleta: quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')}. Pulse para continuarla">${ET[m]} ½</span>` : `<span class="estado si" role="button" tabindex="0" data-ficha="${esc(c)}" title="Aplicada el ${esc(r.fecha)}. Pulse para ver la ficha">${ET[m]} ✓</span>`) : `<span class="estado pend" role="button" tabindex="0" data-apl="${esc(c)}" data-m="${m}" title="Sin aplicar. Pulse para aplicar ahora">${ET[m]} ·</span>`; };
+  const celdaApl = (c, m) => {
+    const e = estadoPrueba(c, m);
+    if (e.estado === 'completa') return `<span class="estado si" role="button" tabindex="0" data-ficha="${esc(c)}" title="${m} completo el ${esc(e.fecha)}. Pulse para ver la ficha">✓ Completa</span>`;
+    if (e.estado === 'sin') return `<button class="apl pend" data-apl="${esc(c)}" data-m="${m}" title="Sin empezar. Pulse para aplicar el ${m.toLowerCase()}">Aplicar</button>`;
+    const pct = Math.round(100 * e.prog.n / e.prog.total);
+    return `<button class="apl curso" data-apl="${esc(c)}" data-m="${m}" title="En curso: ${esc(txtProg(e))} — pulse para continuar"><span class="cifras"><b>${e.prog.n}</b>/${e.prog.total} preg. · <b>${e.prog.sits}</b>/${e.prog.totalSits} sit.</span><span class="barra"><i style="width:${pct}%"></i></span><span class="sigue">Continuar ›</span></button>`;
+  };
   const marcaCal = (c, m) => {
-    const r = reg(c, m); if (!r) return `<span class="estado nada" title="Aún no se aplica">${ET[m]} –</span>`;
+    const r = reg(c, m); if (!r || r.incompleta) return `<span class="estado nada" title="${r ? 'Se califica cuando la prueba esté completa' : 'Aún no se aplica'}">${ET[m]} –</span>`;
     const e = estadoCalif(cal(c, m)), n = ['1', '2'].filter((x) => cal(c, m)[x]?.completa).length;
     const t = { completa: ['si', '✓', 'Puntuación acordada. Pulse para revisarla'], doble: ['medio', '2/2', 'Calificada por los dos; falta el acuerdo. Pulse para acordar'], parcial: ['medio', `${n}/2`, 'Calificación en proceso. Pulse para calificar'], pendiente: ['pend', '·', 'Sin calificar. Pulse para calificar'] }[e];
     return `<span class="estado ${t[0]}" role="button" tabindex="0" data-cal="${esc(c)}" data-m="${m}" data-e="${e}" title="${t[2]}">${ET[m]} ${t[1]}</span>`;
   };
-  const filaP = (p) => { const n = nReg(p.codigo); return `<tr><td><b>${esc(p.codigo)}</b></td><td><a href="#" data-ficha="${esc(p.codigo)}" title="Abrir la ficha del estudiante">${esc(nom(p))}</a></td><td>${esc(p.sexo)}</td><td>${esc(p.edad)}</td>` +
-      `<td>${marcaApl(p.codigo, 'Pretest')}${marcaApl(p.codigo, 'Postest')}</td><td>${marcaCal(p.codigo, 'Pretest')}${marcaCal(p.codigo, 'Postest')}</td>` +
+  const filaP = (p) => { const n = nReg(p.codigo); return `<tr><td><b>${esc(p.codigo)}</b></td><td><a href="#" data-ficha="${esc(p.codigo)}" title="Abrir la ficha del estudiante">${esc(nom(p))}</a></td><td class="cen" title="${esc(p.sexo)}">${SX[p.sexo] || esc(p.sexo)}</td><td class="cen">${esc(p.edad)}</td>` +
+      `<td class="apl-td">${celdaApl(p.codigo, 'Pretest')}</td><td class="apl-td">${celdaApl(p.codigo, 'Postest')}</td><td>${marcaCal(p.codigo, 'Pretest')}${marcaCal(p.codigo, 'Postest')}</td>` +
       `<td><button class="x ${n ? 'con-datos' : ''}" data-del="${esc(p.codigo)}" title="${n ? `Eliminar (tiene ${n} aplicaci${n > 1 ? 'ones' : 'ón'}; se guardan en la papelera)` : 'Eliminar estudiante'}">×</button></td></tr>`; };
   const lista = ps.filter((p) => p.grupo === grupoActivo);
   const buscar = lista.length > 5 ? `<div class="buscar"><input id="pBuscar" placeholder="Buscar por nombre o código" aria-label="Buscar estudiante"><span id="pBuscarN"></span></div>` : '';
-  $('#tablaP').innerHTML = tabsGrupo(ps, (l) => l.length, buscar) + (lista.length ? `<table class="datos"><thead><tr><th>Código</th><th>Nombre</th><th>Sexo</th><th>Edad</th><th>Prueba<small>${esc(DEFS[versionDeGrupo(grupoActivo)].tecnico)}</small></th><th>Calificación<small>dos calificadores y acuerdo</small></th><th></th></tr></thead><tbody>` + lista.map(filaP).join('') + '</tbody></table>'
+  const enCurso = lista.filter((p) => MOMENTOS.some((m) => estadoPrueba(p.codigo, m).estado === 'curso')).length, completas = lista.reduce((n, p) => n + MOMENTOS.filter((m) => estadoPrueba(p.codigo, m).estado === 'completa').length, 0);
+  const resumen = lista.length ? `<p class="guia" style="margin:-6px 0 10px;font-size:.88em">${lista.length} estudiante${lista.length > 1 ? 's' : ''} · ${completas} prueba${completas === 1 ? '' : 's'} completa${completas === 1 ? '' : 's'} · ${enCurso} con una prueba en curso · instrumento: ${esc(DEFS[versionDeGrupo(grupoActivo)].nombre_version)}</p>` : '';
+  $('#tablaP').innerHTML = tabsGrupo(ps, (l) => l.length, buscar) + resumen + (lista.length ? `<table class="datos est"><thead><tr><th>Código</th><th>Nombre</th><th class="cen" title="Sexo: F = femenino, M = masculino">Sx</th><th class="cen">Edad</th><th>Pretest<small>antes de la intervención</small></th><th>Postest<small>después de la intervención</small></th><th>Calificación<small>dos calificadores y acuerdo</small></th><th></th></tr></thead><tbody>` + lista.map(filaP).join('') + '</tbody></table>'
     : `<div class="aviso nota">Aún no hay estudiantes en el grupo ${grupoActivo}. Regístrelos con el formulario de arriba.</div>`) + papeleraHtml();
   activarTabs($('#tablaP'), verEstudiantes);
   $('#pBuscar')?.addEventListener('input', () => filtrarFilas($('#pBuscar'), $('#tablaP table'), $('#pBuscarN')));
   const cod = $('#pCodigo').value.trim().toUpperCase();
   if (!cod || codigoUsado(cod)) { const n = Math.max(0, ...ps.concat(D.papelera || []).map((p) => Number((p.codigo.match(/^E(\d+)$/) || [])[1]) || 0)) + 1; $('#pCodigo').value = 'E' + z(n); } // siguiente al mayor usado: un código nunca se repite
   $('#tablaP').querySelectorAll('[data-ficha]').forEach((ch) => ch.addEventListener('click', () => verEstudiante(ch.dataset.ficha)));
-  $('#tablaP').querySelectorAll('[data-apl]').forEach((ch) => ch.addEventListener('click', () => irAplicar(ch.dataset.apl, ch.dataset.m)));
+  $('#tablaP').querySelectorAll('[data-apl]').forEach((ch) => ch.addEventListener('click', () => iniciarAplicacion(ch.dataset.apl, ch.dataset.m)));
   $('#tablaP').querySelectorAll('[data-cal]').forEach((ch) => ch.addEventListener('click', () => irCalificar(ch.dataset.cal, ch.dataset.m, ch.dataset.e)));
   $('#tablaP').querySelectorAll('[data-del]').forEach((b) => b.addEventListener('click', async () => {
     const c = b.dataset.del, n = nReg(c);
@@ -156,7 +181,7 @@ $('#btnAddP').addEventListener('click', async () => {
     await api('participante', { method: 'PUT', body: { row, nuevo: true } });
     m.innerHTML = `<div class="aviso ok">Registrado ${esc(row.codigo)} · ${esc(row.nombre)} ${esc(row.apellido)}.</div>`;
     $('#pCodigo').value = ''; $('#pNombre').value = ''; $('#pApellido').value = ''; $('#pEdad').value = ''; $('#pSexo').value = ''; $('#pSexo').classList.add('vacio'); grupoActivo = row.grupo; localStorage.setItem('grupoActivo', grupoActivo);
-    await recargar(); $('#pNombre').focus();
+    await recargar(); $('#pRegistro').open = true; $('#pNombre').focus();
   } catch (e) { m.innerHTML = `<div class="aviso mal">${esc(e.message)}</div>`; }
 });
 
@@ -173,20 +198,23 @@ function avatar(sexo) { // niño o niña según el sexo registrado
 }
 const chipCal = (c, m) => { // estado de la calificación de una aplicación, para la ficha
   const C = cal(c, m), e = estadoCalif(C), n1 = C['1'], n2 = C['2'];
-  const c1 = n1 ? `<span class="${n1.completa ? 'ok' : 'medio'}">Calificador 1${n1.calificador ? ': ' + esc(n1.calificador) : ''}${n1.completa ? ' ✓' : ' (en proceso)'}</span>` : '<span>Calificador 1: pendiente</span>';
-  const c2 = n2 ? `<span class="${n2.completa ? 'ok' : 'medio'}">Calificador 2${n2.calificador ? ': ' + esc(n2.calificador) : ''}${n2.completa ? ' ✓' : ' (en proceso)'}</span>` : '<span>Calificador 2: pendiente</span>';
+  const c1 = n1 ? `<span class="${n1.completa ? 'ok' : 'medio'}">Calificador 1${n1.calificador && n1.calificador !== 'Calificador 1' ? ': ' + esc(n1.calificador) : ''}${n1.completa ? ' ✓' : ' (en proceso)'}</span>` : '<span>Calificador 1: pendiente</span>';
+  const c2 = n2 ? `<span class="${n2.completa ? 'ok' : 'medio'}">Calificador 2${n2.calificador && n2.calificador !== 'Calificador 2' ? ': ' + esc(n2.calificador) : ''}${n2.completa ? ' ✓' : ' (en proceso)'}</span>` : '<span>Calificador 2: pendiente</span>';
   const f = e === 'completa' ? `<span class="ok">Acordada el ${esc(C.F.fecha)} ✓</span>` : e === 'doble' ? '<span class="medio">Acuerdo pendiente</span>' : '';
   return `<div class="calif-est">${c1}${c2}${f}<button class="lnk chico" data-cal="${esc(c)}" data-m="${m}" data-e="${e}">${e === 'completa' ? 'Ver acuerdo' : e === 'doble' ? 'Acordar' : 'Calificar'}</button></div>`;
 };
-function fichaPrueba(codigo) {
+function fichaPrueba(codigo, editar = false) {
   const regs = MOMENTOS.map((m) => reg(codigo, m)), S = MOMENTOS.map((m, i) => (regs[i] ? sumas(regs[i], cal(codigo, m).F) : null));
   const celda = (v) => `<td>${v ?? '<span class="nada">–</span>'}</td>`;
   const filas = PC.habilidades.map((h) => { const v = S.map((s) => (s ? s[h.id] : null)), camb = v[0] != null && v[1] != null ? v[1] - v[0] : null; return `<tr><td><span title="${esc(h.nombre)} (ítems ${h.items.map((x) => ITEM[x].num).join(', ')})">${esc(h.corto)} <small>0-8</small></span></td>${v.map(celda).join('')}<td class="camb ${camb > 0 ? 'mas' : camb < 0 ? 'menos' : ''}">${camb == null ? '' : (camb > 0 ? '+' : '') + camb}</td></tr>`; }).join('') +
     (() => { const v = S.map((s) => (s ? s.total : null)), camb = v[0] != null && v[1] != null ? v[1] - v[0] : null; return `<tr class="total"><td><span title="${esc(PC.total.etiqueta)}">Total <small>0-40</small></span></td>${v.map(celda).join('')}<td class="camb ${camb > 0 ? 'mas' : camb < 0 ? 'menos' : ''}">${camb == null ? '' : (camb > 0 ? '+' : '') + camb}</td></tr>`; })();
   const obs = (r) => (r.observaciones ? ` · <i>${esc(r.observaciones)}</i>` : '');
-  const meta = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<div class="meta"><span><b>${m}</b> sin aplicar</span><button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Aplicar ahora</button></div>`;
+  const borrar = (m) => (editar ? `<button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}" title="Borra las respuestas guardadas de esta prueba (exige escribir el código)">Eliminar</button>` : ''); // solo en modo edición, para que no se pulse por accidente
+  const meta = MOMENTOS.map((m, i) => { const r = regs[i], e = estadoPrueba(codigo, m);
+    if (e.estado === 'sin') return `<div class="meta"><span><b>${m}</b> sin empezar</span><button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Aplicar</button></div>`;
+    if (e.estado === 'curso') return `<div class="meta"><span><b>${m}</b> <b style="color:#B54E00">en curso</b> · ${esc(txtProg(e))}${r ? ` · aplica ${esc(r.aplicador)}` : ''}${e.local ? ' · <span title="Este dispositivo tiene respuestas más recientes que las guardadas en el servidor; se envían al continuar">avance en este dispositivo</span>' : ''}</span><button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Continuar</button>${borrar(m)}</div>`;
     const om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante');
-    return `<div class="meta"><span><b>${m}</b> ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${r.incompleta ? ` · <b style="color:#B54E00">incompleta</b> (quedó en el ítem ${esc(ITEM[r.interrumpida_en]?.num ?? r.interrumpida_en ?? '?')})` : ''}${versionDe(r) !== VERSION_ACTUAL ? ` · <span title="Versión del instrumento con la que se aplicó; se muestra y se califica con sus textos, opciones y claves">${esc(nombreVersion(versionDe(r)))}</span>` : ''}${obs(r)}${chipCal(codigo, m)}</span>${r.incompleta ? `<button class="lnk chico" data-aplicar data-c="${esc(codigo)}" data-m="${m}">Continuar</button>` : ''}<button class="lnk chico mal" data-borrar data-c="${esc(codigo)}" data-m="${m}">Eliminar</button></div>`; }).join('');
+    return `<div class="meta"><span><b>${m}</b> <b style="color:var(--ok)">completo</b> el ${esc(r.fecha_hora || r.fecha)} · aplicó ${esc(r.aplicador)} · ${fmtDur(r.duracion_seg)} · protocolo <span style="white-space:nowrap">${esc(r.protocolo || '')}</span>${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''}${r.orden ? ` · orden de las situaciones: ${ordenNums(r)}` : ''}${versionDe(r) !== VERSION_ACTUAL ? ` · <span title="Versión del instrumento con la que se aplicó; se muestra con sus textos, opciones y claves">${esc(nombreVersion(versionDe(r)))}</span>` : ''}${obs(r)}${chipCal(codigo, m)}</span>${borrar(m)}</div>`; }).join('');
   const pend = regs.some((r, i) => r && S[i].total == null) ? '<p class="guia" style="margin:6px 0 0;font-size:.85em">Las sumas aparecen cuando la puntuación acordada está completa y ningún ítem queda sin oportunidad de respuesta.</p>' : '';
   return `<div class="prueba"><h3>${esc(PC.corto)}<span>${esc(PC.titulo)}</span></h3><table class="dims"><thead><tr><th></th><th>Pretest</th><th>Postest</th><th title="Postest menos pretest">Cambio</th></tr></thead><tbody>${filas}</tbody></table>${pend}${meta}</div>`;
 }
@@ -196,7 +224,7 @@ function fichaItems(codigo) { // respuestas y puntaje de cada ítem, pre y post
   const resp = (r, it) => { if (!r) return '<span class="nada">–</span>'; const e = r.estado?.[it.codigo]; if (e === 'faltante') return '<i>sin oportunidad</i>'; if (e === 'omitido') return '<i>omitió</i>';
     return defVersion(it, r).partes.map((p) => { const v = r.respuestas[it.codigo + p.id]; if (vacio(v)) return ''; if (p.tipo === 'union') return p.filas.map((f) => `${f.nombre} → ${v[f.id] || '–'}`).join(' · '); if (p.tipo === 'texto') return `«${esc(v)}»`; if (p.tipo === 'multiple') return v.join(', '); return p.letras ? v : esc(textoOpcion(p, v)); }).filter(Boolean).join(' · '); };
   const pt = (i, it) => { if (!regs[i]) return '–'; if (it.auxiliar) return ''; const v = S[i].items[it.codigo]; return v == null ? (regs[i].estado?.[it.codigo] === 'faltante' ? '–' : '<span class="nada" title="Pendiente de calificación acordada">?</span>') : v; };
-  const resumen = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<span><b>${m}:</b> sin aplicar</span>`; const n = PUNTUABLES.filter((it) => !r.estado?.[it.codigo]).length, om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante'), c = estadoCalif(cal(codigo, m)); return `<span><b>${m}:</b> ${n} de ${PUNTUABLES.length} ítems respondidos${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''} · calificación ${{ completa: 'acordada', doble: 'por acordar', parcial: 'en proceso', pendiente: 'pendiente' }[c]}</span>`; }).join('');
+  const resumen = MOMENTOS.map((m, i) => { const r = regs[i]; if (!r) return `<span><b>${m}:</b> sin aplicar</span>`; const n = PUNTUABLES.filter((it) => !r.estado?.[it.codigo]).length, om = listaNum(r, 'omitido'), fa = listaNum(r, 'faltante'), c = estadoCalif(cal(codigo, m)); return `<span><b>${m}:</b> ${n} de ${PUNTUABLES.length} ítems respondidos${om ? ` · omitidos: ${om}` : ''}${fa ? ` · sin oportunidad: ${fa}` : ''} · calificación <span class="cal-est ${c === 'completa' ? 'ok' : 'pend'}">${{ completa: 'acordada ✓', doble: 'por acordar', parcial: 'en proceso', pendiente: 'pendiente' }[c]}</span></span>`; }).join('');
   return `<div class="prueba"><h3>Respuestas y puntaje de cada ítem<span>Puntaje final: clave en los cerrados, puntuación acordada en los de rúbrica; «?» = pendiente de acordar</span></h3><div class="resumen-items">${resumen}</div><details class="items-ficha"><summary>Ver los ${ITEMS.length} ítems</summary><table class="items-tab"><thead><tr><th>Ítem</th><th>Pretest</th><th class="pt">Pts</th><th>Postest</th><th class="pt">Pts</th></tr></thead><tbody>${ITEMS.map((it) => `<tr><td><b>${it.num ?? 'EI'}</b> <small>${esc(it.sub || it.etiqueta)}</small></td><td class="txt">${resp(regs[0], it)}</td><td class="pt">${pt(0, it)}</td><td class="txt">${resp(regs[1], it)}</td><td class="pt">${pt(1, it)}</td></tr>`).join('')}</tbody></table></details></div>`;
 }
 function verEstudiante(codigo, editar = false) {
@@ -214,7 +242,7 @@ function verEstudiante(codigo, editar = false) {
       <div class="campo" style="margin-top:10px"><label for="eObs">Observaciones (opcional)</label><input id="eObs" value="${esc(p.observaciones || '')}" placeholder="Por ejemplo: repite el grado, usa gafas, se retiró en octubre"></div>
       <p class="guia" style="margin:10px 0;font-size:.88em">El código une todas sus aplicaciones y calificaciones, y lo siguen si lo cambia; no puede ser el de otro estudiante. Al cambiarlo cambia también el código de protocolo de sus aplicaciones.</p>
       <div class="fila"><button class="btn" type="submit" id="eGuardar">Guardar cambios</button><button class="btn sec" type="button" id="eCancelar">Cancelar</button></div><div id="eMsg" style="margin-top:10px"></div></form>
-    <div class="pruebas">${fichaPrueba(codigo)}${fichaItems(codigo) || '<div class="prueba"><h3>Respuestas y puntaje de cada ítem</h3><p class="guia" style="margin:0;font-size:.9em">Cuando haya aplicaciones, aquí aparecen las respuestas y el puntaje de cada ítem.</p></div>'}</div>`;
+    <div class="pruebas">${fichaPrueba(codigo, editar)}${fichaItems(codigo) || '<div class="prueba"><h3>Respuestas y puntaje de cada ítem</h3><p class="guia" style="margin:0;font-size:.9em">Cuando haya aplicaciones, aquí aparecen las respuestas y el puntaje de cada ítem.</p></div>'}</div>`;
   $('#ficha').classList.remove('oculto');
   $('#fichaCuerpo').querySelectorAll('[data-editar]').forEach((b) => b.addEventListener('click', (e) => { e.preventDefault(); verEstudiante(codigo, !editar); if (!editar) $('#eNombre').focus(); }));
   $('#eCancelar').addEventListener('click', () => verEstudiante(codigo, false));
@@ -225,12 +253,12 @@ function verEstudiante(codigo, editar = false) {
     if (!row.codigo || !row.nombre || !row.apellido || !row.edad) return ($('#eMsg').innerHTML = '<div class="aviso mal">Código, nombre, apellido y edad son obligatorios.</div>');
     try { await api('participante', { method: 'PUT', body: { row, ...(nuevo !== p.codigo ? { anterior: p.codigo } : {}) } }); toast(nuevo !== p.codigo ? `Datos actualizados: ${p.codigo} pasa a ser ${nuevo}` : 'Datos actualizados'); await cargar(); verEstudiante(nuevo, false); ir(vista); } catch (err) { $('#eMsg').innerHTML = `<div class="aviso mal">${esc(err.message)}</div>`; }
   });
-  $('#fichaCuerpo').querySelectorAll('[data-aplicar]').forEach((b) => b.addEventListener('click', () => irAplicar(b.dataset.c, b.dataset.m)));
+  $('#fichaCuerpo').querySelectorAll('[data-aplicar]').forEach((b) => b.addEventListener('click', () => iniciarAplicacion(b.dataset.c, b.dataset.m)));
   $('#fichaCuerpo').querySelectorAll('[data-cal]').forEach((b) => b.addEventListener('click', () => { $('#ficha').classList.add('oculto'); irCalificar(b.dataset.cal, b.dataset.m, b.dataset.e); }));
   $('#fichaCuerpo').querySelectorAll('[data-borrar]').forEach((b) => b.addEventListener('click', async () => {
-    const { c, m } = b.dataset;
-    if (!(await dialogo({ titulo: 'Eliminar aplicación', texto: `Se elimina la prueba de ${c} ${nombreDe(c)} en ${m}, con sus calificaciones. Esta acción no se puede deshacer.`, ok: 'Eliminar', peligro: true }))) return;
-    try { await api(`registro?codigo=${c}&momento=${m}`, { method: 'DELETE' }); toast('Aplicación eliminada'); await cargar(); verEstudiante(c); ir(vista); } catch (e) { toast(e.message, true); }
+    const { c, m } = b.dataset, e = estadoPrueba(c, m), n = e.estado === 'curso' ? e.prog.n : PUNTUABLES.length;
+    if (!(await dialogo({ titulo: `Eliminar el ${m.toLowerCase()} de ${c}`, texto: `Se borran las ${n} respuestas guardadas de ${c} ${nombreDe(c)} en ${m}${e.estado === 'completa' ? ', con sus calificaciones' : ''}. Esta acción no se puede deshacer. Si solo quiere seguir respondiendo, use «Continuar».`, ok: 'Eliminar definitivamente', peligro: true, escribir: c }))) return;
+    try { await api(`registro?codigo=${c}&momento=${m}`, { method: 'DELETE' }); const a = avanceLocal(c, m); if (a) localStorage.removeItem('avance'); toast('Aplicación eliminada'); await cargar(); verEstudiante(c, true); ir(vista); } catch (e) { toast(e.message, true); }
   }));
 }
 $('#fichaCerrar').addEventListener('click', () => $('#ficha').classList.add('oculto'));
@@ -238,57 +266,28 @@ $('#ficha').addEventListener('click', (e) => { if (e.target === $('#ficha')) $('
 document.addEventListener('keydown', (e) => { if (e.key === 'Escape') { $('#ficha').classList.add('oculto'); $('#bitacora').classList.add('oculto'); } if (e.key === 'Enter' && e.target.matches('.estado[tabindex], label[for=archivoCopia]')) e.target.click(); });
 document.addEventListener('click', (e) => { if (e.target.matches('[data-ficha]')) e.preventDefault(); });
 
-/* ---------- aplicar ---------- */
-let preApl = null;
-const momA = seg('#aMom');
-$('#aInsCorto').textContent = PC.corto; $('#aInsTec').textContent = `${PC.titulo} · ${PC.tecnico}`;
-const pintarTecApl = () => { const d = DEFS[versionDeGrupo(grupoDe($('#aCod').value))] || PC; $('#aInsTec').textContent = `${d.titulo} · ${d.tecnico}`; };
-$('#aCod').addEventListener('change', pintarTecApl);
-function irAplicar(codigo, momento) { preApl = { codigo, momento }; $('#ficha').classList.add('oculto'); origen = 'estudiantes'; ir('aplicar'); }
+/* ---------- empezar o continuar una prueba ---------- */
 $('#ayudaBtn').addEventListener('click', () => { $('#ayudaPanel').innerHTML = guionHtml(); $('#ayudaPanel').classList.toggle('oculto'); });
-function llenarSelEst(q = '') {
-  const sel = $('#aCod'), prev = sel.value, ql = q.trim().toLowerCase();
-  const lista = D.participantes.filter((p) => !ql || `${p.codigo} ${nom(p)}`.toLowerCase().includes(ql));
-  sel.innerHTML = porGrupo(lista).map(([g, l]) => `<optgroup label="${g}">` + l.map((p) => `<option value="${esc(p.codigo)}">${esc(p.codigo)} · ${esc(nom(p))}</option>`).join('') + '</optgroup>').join('') || `<option value="">${ql ? '(sin coincidencias)' : '(registre estudiantes primero)'}</option>`;
-  if (prev && [...sel.options].some((o) => o.value === prev)) sel.value = prev;
-  if (typeof pintarTecApl === 'function') pintarTecApl();
-}
-$('#aBuscar').addEventListener('input', () => llenarSelEst($('#aBuscar').value));
-async function verAplicar() {
-  try { await cargar(); } catch (e) { toast(e.message, true); }
-  $('#aBuscar').value = ''; llenarSelEst();
-  const sel = $('#aCod');
-  if (preApl) { sel.value = preApl.codigo; $('#aMom').querySelectorAll('button').forEach((b) => b.classList.toggle('activo', b.dataset.m === preApl.momento)); preApl = null; $('#aMsg').innerHTML = ''; }
-  if (!$('#aApl').value) $('#aApl').value = localStorage.getItem('aplicador') || '';
-  avisoAvance();
-}
-// aplicación sin terminar guardada en este dispositivo (por si se cerró el navegador o se agotó la batería)
+// Avance guardado en este dispositivo tras cada clic (por si se cierra el navegador o se agota la batería antes de que el
+// servidor reciba la última pregunta). Se usa al continuar si va más adelante que lo guardado en el servidor.
 function leerAvance() { try { const a = JSON.parse(localStorage.getItem('avance') || 'null'); return a && a.resp && D.participantes.some((p) => p.codigo === a.codigo) ? a : null; } catch { return null; } }
-function avisoAvance() {
-  const a = leerAvance(), el = $('#aAvance');
-  if (!a) { el.classList.add('oculto'); el.innerHTML = ''; return; }
-  const hechas = PUNTUABLES.filter((it) => respondido(it, a.resp) || a.estado[it.codigo]).length;
-  el.innerHTML = `<div class="aviso nota" style="margin:0"><b>Aplicación sin terminar:</b> ${esc(a.codigo)} ${esc(nombreDe(a.codigo))}, ${esc(a.momento)} · ${hechas} de ${PUNTUABLES.length} ítems · ${esc(a.fecha)} <span class="fila" style="display:inline-flex;gap:8px;margin-left:10px"><button class="btn chico" id="btnContinuar">Continuar</button><button class="btn chico sec" id="btnDescartarAvance">Descartar</button></span></div>`;
-  el.classList.remove('oculto');
-  $('#btnContinuar').addEventListener('click', () => { const a = leerAvance(); if (a) startKid({ codigo: a.codigo, momento: a.momento, aplicador: a.aplicador }, a); });
-  $('#btnDescartarAvance').addEventListener('click', async () => { if (await dialogo({ titulo: 'Descartar aplicación sin terminar', texto: 'Se borran las respuestas guardadas en este dispositivo.', ok: 'Descartar', peligro: true })) { localStorage.removeItem('avance'); avisoAvance(); } });
+// Empieza una prueba o la continúa en la pregunta en la que quedó (en este dispositivo o en otro): no hay avisos ni opción de
+// empezar de nuevo; para repetir una prueba hay que eliminarla desde la ficha, escribiendo el código del estudiante.
+async function iniciarAplicacion(codigo, momento) {
+  const p = D.participantes.find((x) => x.codigo === codigo); if (!p) return;
+  const v = versionDeGrupo(p.grupo), e = estadoPrueba(codigo, momento);
+  if (e.estado === 'completa') { toast(`El ${momento.toLowerCase()} de ${codigo} ya está completo`); return verEstudiante(codigo); }
+  if (e.estado === 'curso' && !e.local && versionDe(e.r) !== v) { // el grupo cambió de versión del instrumento con una prueba a medias (caso raro)
+    await dialogo({ titulo: 'No se puede continuar', texto: `El ${momento.toLowerCase()} de ${codigo} ${nom(p)} se empezó con la ${nombreVersion(versionDe(e.r))} y su grupo usa ahora la ${nombreVersion(v)}. Para aplicarlo de nuevo, elimine esa prueba desde la ficha del estudiante.`, ok: 'Entendido', cancelar: 'Cerrar' }); return;
+  }
+  const texto = e.estado === 'curso' ? `${codigo} ${nom(p)} · ${p.grupo}. Lleva ${txtProg(e)}. Se continúa en esa pregunta, con las respuestas anteriores ya cerradas.`
+    : `${codigo} ${nom(p)} · ${p.grupo} · ${nombreVersion(v)}. Empieza con las instrucciones y la práctica. Las respuestas se guardan tras cada pregunta y la prueba se puede continuar otro día.`;
+  const apl = await dialogo({ titulo: `${e.estado === 'curso' ? 'Continuar' : 'Aplicar'} ${momento.toLowerCase()}`, texto, ok: e.estado === 'curso' ? 'Continuar' : 'Empezar', pedir: { label: 'Aplicador(a)', valor: localStorage.getItem('aplicador') || '', placeholder: 'Nombre de quien aplica' } });
+  if (!apl) return;
+  localStorage.setItem('aplicador', apl); $('#ficha').classList.add('oculto');
+  usarVersion(v); // el Piloto se aplica con la versión 1; Experimental y Control, con la vigente
+  startKid({ codigo, momento, aplicador: apl, version: v }, e.estado === 'curso' ? (e.local ? e.a : avanceDesdeRegistro(e.r)) : null);
 }
-$('#btnStart').addEventListener('click', async () => {
-  const codigo = $('#aCod').value, momento = momA(), apl = $('#aApl').value.trim(), m = $('#aMsg');
-  if (!codigo) return (m.innerHTML = '<div class="aviso mal">Registre al estudiante antes de aplicar.</div>');
-  if (!apl) return (m.innerHTML = '<div class="aviso mal">Escriba el nombre del aplicador.</div>');
-  localStorage.setItem('aplicador', apl);
-  const prev = reg(codigo, momento), a = leerAvance();
-  if (a && a.codigo === codigo && a.momento === momento && (await dialogo({ titulo: 'Aplicación sin terminar', texto: 'Hay un avance guardado de esta misma aplicación en este dispositivo.', ok: 'Continuar donde iba', cancelar: 'Empezar de nuevo' }))) return startKid({ codigo, momento, aplicador: apl }, a);
-  if (prev && prev.incompleta && versionDe(prev) !== versionDeGrupo(grupoDe(codigo))) { // no se mezclan dos versiones del instrumento en una misma aplicación
-    if (!(await dialogo({ titulo: 'Aplicación incompleta de otra versión', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta, aplicada con la ${nombreVersion(versionDe(prev))}. Su grupo usa la ${nombreVersion(versionDeGrupo(grupoDe(codigo)))}, así que solo es posible empezar de nuevo (se reemplaza lo guardado).`, ok: 'Empezar de nuevo', peligro: true }))) return;
-  } else if (prev && prev.incompleta) {
-    const r = await dialogo({ titulo: 'Aplicación incompleta', texto: `${codigo} ${nombreDe(codigo)} tiene la prueba en ${momento} incompleta (${prev.fecha_hora || prev.fecha}; quedó en el ítem ${ITEM[prev.interrumpida_en] ? (ITEM[prev.interrumpida_en].num || prev.interrumpida_en) : '?'}). Puede continuar desde donde quedó o empezar de nuevo (se reemplaza lo guardado).`, ok: 'Continuar donde quedó', otro: 'Empezar de nuevo', cancelar: 'Cancelar' });
-    if (!r) return;
-    if (r === true) { m.innerHTML = ''; usarVersion(versionDeGrupo(grupoDe(codigo))); return startKid({ codigo, momento, aplicador: apl }, avanceDesdeRegistro(prev)); }
-  } else if (prev && !(await dialogo({ titulo: 'Ya existe esta aplicación', texto: `${codigo} ${nombreDe(codigo)} ya tiene la prueba en ${momento} (${prev.fecha}). Si continúa, al guardar se reemplazará ese registro y se descartarán sus calificaciones.`, ok: 'Continuar y reemplazar', peligro: true }))) return;
-  m.innerHTML = ''; startKid({ codigo, momento, aplicador: apl });
-});
 
 /* ---------- pantalla del niño ---------- */
 let K = null;
@@ -339,7 +338,8 @@ function avanceDesdeRegistro(r) {
 function startKid(cfg, avance = null) {
   usarVersion(cfg.version || versionDeGrupo(grupoDe(cfg.codigo))); // el Piloto se aplica con la versión 1; Experimental y Control, con la vigente
   const orden = (avance && avance.orden) || ordenSituaciones(cfg.momento), seq = secuencia(orden);
-  K = { ...cfg, orden, seq, i: avance ? Math.min(avance.i, seq.length - 2) : 0, resp: avance ? avance.resp : {}, estado: avance ? avance.estado || {} : {}, pracResp: {}, t0: avance ? Date.now() - (avance.transcurrido || 0) : Date.now(), fecha_inicio: (avance && avance.fecha_inicio) || hoy() };
+  const i0 = avance ? Math.min(Math.max(avance.i || 0, avance.max || 0), seq.length - 2) : 0;
+  K = { ...cfg, orden, seq, i: i0, max: i0, resp: avance ? avance.resp : {}, estado: avance ? avance.estado || {} : {}, pracResp: {}, t0: avance ? Date.now() - (avance.transcurrido || 0) : Date.now(), fecha_inicio: (avance && avance.fecha_inicio) || hoy() };
   $('#kTag').innerHTML = `<b>${esc(PC.corto)}</b> · ${esc(cfg.codigo)} ${esc(nombreDe(cfg.codigo))} · ${esc(cfg.momento)}`;
   $('#kAyudaPanel').innerHTML = guionHtml(); $('#kAyudaPanel').classList.add('oculto');
   $('#kid').classList.remove('oculto'); $('#app').classList.add('oculto');
@@ -366,7 +366,7 @@ function situacionHtml(scr) {
 }
 const letraDe = (i) => String.fromCharCode(65 + i);
 function parteHtml(scr, p, it = scr.it) {
-  const k = it.codigo + p.id, v = valorDe(scr, k), bloq = !scr.prac && K.estado[it.codigo];
+  const k = it.codigo + p.id, v = valorDe(scr, k), bloq = (!scr.prac && K.estado[it.codigo]) || scr.g < K.seq[K.max].g;
   let h = `<div class="k-parte" data-k="${k}">`;
   if (p.intro) h += `<p class="intro">${esc(p.intro)}</p>`;
   if (p.pregunta) h += `<p class="q">${esc(p.pregunta)}</p>`;
@@ -374,7 +374,7 @@ function parteHtml(scr, p, it = scr.it) {
   if (p.tipo === 'opcion') h += `<div class="opts ${p.compacto ? 'compacto fila-h' : ''}">${p.opciones.map((o, i) => `<button class="opt ${v === o.v ? 'sel' : ''}" data-opt="${k}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}>${p.letras ? `<span class="letra">${esc(o.v)}</span>` : '<span class="circ"></span>'}<span>${esc(o.t)}</span></button>`).join('')}</div>`;
   else if (p.tipo === 'multiple') h += `<div class="opts">${p.opciones.map((o) => `<button class="opt ${(v || []).includes(o.v) ? 'sel' : ''}" data-multi="${k}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}><span class="casilla">✓</span><span>${esc(o.t)}</span></button>`).join('')}</div><p class="cuenta" data-cuenta="${k}">${cuentaTxt(p, v)}</p>`;
   else if (p.tipo === 'union') h += `<ul class="leyenda">${p.opciones.map((o) => `<li><b class="letra l${esc(o.v).toLowerCase()}">${esc(o.v)}</b><span>${esc(o.t)}</span></li>`).join('')}</ul><div class="union">${p.filas.map((f) => `<div class="fila-u"><span class="quien">${esc(f.nombre)}</span><span class="flecha">→</span><div class="letras">${p.opciones.map((o) => `<button class="${(v || {})[f.id] === o.v ? 'sel' : ''}" data-union="${k}" data-f="${f.id}" data-v="${esc(o.v)}" ${bloq ? 'disabled' : ''}>${esc(o.v)}</button>`).join('')}</div></div>`).join('')}</div>`;
-  else if (p.tipo === 'texto') h += `<div class="k-texto">${p.prefijo ? `<p class="pref">${esc(p.prefijo)}…</p>` : ''}<textarea data-texto="${k}" rows="${scr.mas && scr.mas.length ? 1 : (p.lineas || 2)}" placeholder="Escribe aquí" ${bloq ? 'disabled' : ''}>${esc(v || '')}</textarea></div>`;
+  else if (p.tipo === 'texto') h += `<div class="k-texto">${p.prefijo ? `<p class="pref">${esc(p.prefijo)}…</p>` : ''}<textarea data-texto="${k}" rows="${scr.mas && scr.mas.length && window.innerHeight < 820 ? 1 : (p.lineas || 2)}" placeholder="Escribe aquí" ${bloq ? 'disabled' : ''}>${esc(v || '')}</textarea></div>`;
   return h + '</div>';
 }
 const cuentaTxt = (p, v) => { const n = (v || []).length; return `Has marcado ${n} de ${p.n}.`; };
@@ -386,12 +386,24 @@ function dependencia(scr) {
   if (v && !K.estado[d.item]) return { ok: true, html: `<div class="k-dep"><span>${esc(d.texto)}</span><span>${esc(textoOpcion(p, v))}</span></div>` };
   return { ok: !!d.suave, html: `<div class="k-dep falta">${d.suave ? 'No quedó registrada la primera elección.' : 'No eligió en la pregunta anterior: este ítem queda como dato faltante y no se responde.'}</div>` };
 }
+// Barra de avance por situaciones, en el orden presentado: cada tramo tiene el color de su situación y se llena con sus
+// preguntas respondidas; la situación en pantalla lleva un aro, las completas una marca, y la pausa separa los dos bloques.
+function pintarProgreso(scr) {
+  const hecho = (it) => respondido(it, K.resp) || !!K.estado[it.codigo];
+  const sitActual = scr && scr.sit && scr.sit.id;
+  const segs = K.orden.map((id) => {
+    const sit = PC.situaciones.find((x) => x.id === id), its = PUNTUABLES.filter((it) => it.situacion === id), n = its.filter(hecho).length;
+    const bloque2 = PC.bloques.slice(1).some((b) => b.situaciones.includes(id) && b.situaciones[0] === id);
+    return `<span class="s ${id === sitActual ? 'actual' : ''} ${n === its.length ? 'lista' : ''} ${bloque2 ? 'bloque' : ''}" style="--c:${sit.tema.color};flex:${its.length}" title="Situación ${sit.num}: ${sit.titulo} · ${n} de ${its.length} preguntas"><i style="width:${100 * n / its.length}%"></i><b>${n === its.length ? '✓' : sit.num}</b></span>`;
+  });
+  $('#kProg').innerHTML = segs.join('');
+}
 function renderKid() {
   const scr = K.seq[K.i], body = $('#kBody');
-  const hechos = PUNTUABLES.filter((it) => respondido(it, K.resp) || K.estado[it.codigo]).length;
-  $('#kProg').style.width = (100 * hechos / PUNTUABLES.length) + '%';
+  pintarProgreso(scr);
   $('#kNav').classList.remove('oculto'); $('#kSinResp').classList.add('oculto');
-  $('#kBack').disabled = K.i === 0 || K.seq[K.i - 1].g < scr.g; // atrás solo dentro de la misma hoja
+  $('#kBack').disabled = K.i === 0; // se puede volver a mirar cualquier hoja; las anteriores a la más avanzada están cerradas (solo lectura)
+  const cerrada = scr.g < K.seq[K.max].g; // hoja ya cerrada: se ve, pero no se cambia
   $('#kNext').textContent = 'Siguiente'; $('#kNext').disabled = false;
   body.className = 'kid-body' + (scr.tipo === 'item' ? (scr.mas && scr.mas.length ? ' doble' : '') : ' solo');
   aplicarTema(scr.sit && scr.sit.tema ? scr.sit.tema : scr.prac ? PC.practica.tema : TEMA_BASE);
@@ -414,16 +426,17 @@ function renderKid() {
     $('#kNext').textContent = scr.e ? 'Continuar' : 'Ver las preguntas';
   } else if (scr.tipo === 'item') {
     const it = scr.it, dep = dependencia(scr);
-    if (dep && !dep.ok && !K.estado[it.codigo]) { K.estado[it.codigo] = 'faltante'; guardarAvance(); }
+    if (dep && !dep.ok && !K.estado[it.codigo] && !cerrada) { K.estado[it.codigo] = 'faltante'; guardarAvance(); }
     const e = scr.prac ? null : K.estado[it.codigo], mas = scr.mas || [];
     const pos = scr.prac ? `Práctica ${scr.pracN} de ${PC.practica.items.length}` : it.num ? (mas.length ? `Preguntas ${[scr.pos].concat(scr.posMas).join(' y ')} de ${PUNTUABLES.length}` : `Pregunta ${scr.pos} de ${PUNTUABLES.length}`) : 'Elección inicial';
     $('#kCount').textContent = pos;
     const tagDe = (c) => { const e = K.estado[c]; return e ? `<span class="om ${e === 'faltante' ? 'falt' : ''}">${e === 'omitido' ? 'Sin respuesta: omitió' : 'Sin oportunidad: dato faltante'}</span>` : ''; };
-    const sinResp = (c) => (mas.length ? `<button class="lnk chico" data-sinresp="${c}">${K.estado[c] ? 'Quitar la marca y responder' : 'Sin respuesta'}</button>` : ''); // con varios ítems en pantalla, cada uno tiene su propio «Sin respuesta»
+    const sinResp = (c) => (mas.length && !cerrada ? `<button class="lnk chico" data-sinresp="${c}">${K.estado[c] ? 'Quitar la marca y responder' : 'Sin respuesta'}</button>` : ''); // con varios ítems en pantalla, cada uno tiene su propio «Sin respuesta»
     const tag = scr.prac ? '' : tagDe(it.codigo);
-    body.innerHTML = situacionHtml(scr) + `<div class="k-preg ${mas.length ? 'doble' : ''}"><p class="num"><span class="pos">${mas.length ? `Pregunta ${scr.pos}` : pos}</span><span class="it">${scr.prac ? 'No se guarda' : it.num ? `Ítem ${it.num}` : esc(it.etiqueta)}</span>${tag}${scr.prac ? '' : sinResp(it.codigo)}</p>${dep ? dep.html : ''}${it.partes.map((p) => parteHtml(scr, p)).join('')}` +
+    const aviso = cerrada ? `<div class="k-cerrada">Hoja cerrada: estas respuestas ya quedaron guardadas y no se pueden cambiar. Pulse «Siguiente» para volver a donde iba.</div>` : '';
+    body.innerHTML = situacionHtml(scr) + `<div class="k-preg ${mas.length ? 'doble' : ''}">${aviso}<div class="k-item"><p class="num"><span class="pos">${mas.length ? `Pregunta ${scr.pos}` : pos}</span><span class="it">${scr.prac ? 'No se guarda' : it.num ? `Ítem ${it.num}` : esc(it.etiqueta)}</span>${tag}${scr.prac ? '' : sinResp(it.codigo)}</p>${dep ? dep.html : ''}${it.partes.map((p) => parteHtml(scr, p)).join('')}</div>` +
       mas.map((m, j) => `<div class="k-mas"><p class="num"><span class="pos">Pregunta ${scr.posMas[j]}</span><span class="it">Ítem ${m.num}</span>${tagDe(m.codigo)}${sinResp(m.codigo)}</p>${m.partes.map((p) => parteHtml(scr, p, m)).join('')}</div>`).join('') + `</div>`;
-    $('#kSinResp').classList.toggle('oculto', !!scr.prac || mas.length > 0); $('#kSinResp').textContent = e ? 'Quitar la marca y responder' : 'Sin respuesta';
+    $('#kSinResp').classList.toggle('oculto', !!scr.prac || mas.length > 0 || cerrada); $('#kSinResp').textContent = e ? 'Quitar la marca y responder' : 'Sin respuesta';
     if (K.i === K.seq.length - 2) $('#kNext').textContent = 'Terminar';
     actualizarNav();
     body.querySelector('.k-preg')?.scrollTo(0, 0);
@@ -439,7 +452,7 @@ function parteLista(scr, p, it = scr.it) {
   if (p.tipo === 'texto') return String(v).trim().length > 0;
   return true;
 }
-function itemListo(scr) { return itemsDe(scr).every((it) => (!scr.prac && K.estado[it.codigo]) || it.partes.every((p) => parteLista(scr, p, it))); }
+function itemListo(scr) { if (scr.g < K.seq[K.max].g) return true; return itemsDe(scr).every((it) => (!scr.prac && K.estado[it.codigo]) || it.partes.every((p) => parteLista(scr, p, it))); }
 function actualizarNav() { const scr = K.seq[K.i]; if (scr.tipo === 'item') $('#kNext').disabled = !itemListo(scr); }
 $('#kBody').addEventListener('click', (e) => {
   const scr = K && K.seq[K.i]; if (!scr || scr.tipo !== 'item') return;
@@ -460,17 +473,17 @@ async function sinRespuesta(it) {
 $('#kNext').addEventListener('click', () => {
   const scr = K.seq[K.i];
   if (scr.tipo === 'item' && !itemListo(scr)) return; // no se avanza con partes sin responder
-  if (K.i < K.seq.length - 1) { K.i++; guardarAvance(); renderKid(); if (scr.tipo === 'item' && !scr.prac && K.seq[K.i].tipo !== 'fin') guardarParcial(); }
+  if (K.i < K.seq.length - 1) { K.i++; const avanza = K.i > K.max; K.max = Math.max(K.max, K.i); guardarAvance(); renderKid(); if (avanza && scr.tipo === 'item' && !scr.prac && K.seq[K.i].tipo !== 'fin') guardarParcial(); }
 });
 $('#kBack').addEventListener('click', () => { if (K.i > 0 && !$('#kBack').disabled) { K.i--; guardarAvance(); renderKid(); } });
-function guardarAvance() { if (!K) return; localStorage.setItem('avance', JSON.stringify({ codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, orden: K.orden, i: K.i, resp: K.resp, estado: K.estado, transcurrido: Date.now() - K.t0, fecha_inicio: K.fecha_inicio, fecha: new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) })); }
+function guardarAvance() { if (!K) return; const scr = K.seq[K.max], en = scr.tipo === 'item' && !scr.prac ? scr.it.codigo : (K.seq.slice(K.i).find((x) => x.tipo === 'item' && !x.prac) || {}).it?.codigo || ''; localStorage.setItem('avance', JSON.stringify({ codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, orden: K.orden, i: K.max, max: K.max, en, resp: K.resp, estado: K.estado, transcurrido: Date.now() - K.t0, fecha_inicio: K.fecha_inicio, fecha: new Date().toLocaleString('es-CO', { dateStyle: 'short', timeStyle: 'short' }) })); }
 // Las respuestas quedan siempre guardadas: tras cada pregunta se envía al servidor la aplicación como incompleta (los ítems no
 // alcanzados quedan como dato faltante) y se puede continuar después desde donde quedó, en este o en otro dispositivo.
 // Sin conexión no pasa nada: el avance sigue en este dispositivo y la aplicación completa se envía al final (o queda en cola).
 let guardandoParcial = null;
 function filaParcial() {
-  const pend = K.seq.filter((x, j) => x.tipo === 'item' && !x.prac && j >= K.i).flatMap((x) => itemsDe(x).map((it) => it.codigo)).filter((c) => !respondido(ITEM[c], K.resp) && !K.estado[c]);
-  const actual = K.seq[K.i], en = actual.tipo === 'item' && !actual.prac ? actual.it.codigo : (pend[0] || '');
+  const pend = K.seq.filter((x, j) => x.tipo === 'item' && !x.prac && j >= K.max).flatMap((x) => itemsDe(x).map((it) => it.codigo)).filter((c) => !respondido(ITEM[c], K.resp) && !K.estado[c]);
+  const actual = K.seq[K.max], en = actual.tipo === 'item' && !actual.prac ? actual.it.codigo : (pend[0] || '');
   return { codigo: K.codigo, momento: K.momento, aplicador: K.aplicador, duracion_seg: Math.round((Date.now() - K.t0) / 1000), fecha_inicio: K.fecha_inicio, respuestas: K.resp, estado: K.estado, ...(K.momento === 'Postest' ? { orden: K.orden } : {}), incompleta: true, pendientes: pend, interrumpida_en: en, observaciones: '' };
 }
 async function guardarParcial() {
@@ -482,9 +495,9 @@ async function guardarParcial() {
 $('#kExit').addEventListener('click', async () => {
   const empezada = K && (Object.keys(K.resp).length > 0 || Object.keys(K.estado).length > 0) && K.seq[K.i].tipo !== 'fin';
   if (!empezada) { localStorage.removeItem('avance'); return cerrarKid(); }
-  if (!(await dialogo({ titulo: 'Salir de la aplicación', texto: 'Lo respondido hasta ahora queda guardado y la aplicación queda incompleta (los ítems que faltan, como dato faltante). Se puede continuar después desde "Aplicar al estudiante".', ok: 'Guardar y salir', cancelar: 'Seguir aquí' }))) return;
+  if (!(await dialogo({ titulo: 'Guardar y salir', texto: `Lo respondido queda guardado. El ${K.momento.toLowerCase()} de ${K.codigo} sigue en curso y se continúa otro día, en la misma pregunta, desde Estudiantes.`, ok: 'Guardar y salir', cancelar: 'Seguir aquí' }))) return;
   const ok = await guardarParcial();
-  toast(ok ? 'Aplicación guardada como incompleta' : 'Sin conexión: el avance queda guardado en este dispositivo');
+  toast(ok ? `${K.momento} de ${K.codigo} guardado: queda en curso` : 'Sin conexión: el avance queda guardado en este dispositivo y se envía al continuar');
   cerrarKid();
 });
 $('#kAyudaBtn').addEventListener('click', () => $('#kAyudaPanel').classList.toggle('oculto'));
@@ -497,23 +510,23 @@ document.addEventListener('keydown', (e) => {
   if (!enTexto && /^[1-4]$/.test(e.key)) { const b = $('#kBody').querySelectorAll('.opts button')[Number(e.key) - 1]; if (b && !b.disabled) b.click(); }
   else if (e.key === 'Enter' && (!enTexto || e.ctrlKey) && !$('#kNext').disabled && !$('#kNav').classList.contains('oculto')) { e.preventDefault(); $('#kNext').click(); }
 });
-function cerrarKid(guardado) { K = null; usarVersion(VERSION_ACTUAL); $('#kid').classList.add('oculto'); $('#app').classList.remove('oculto'); if (guardado && origen === 'estudiantes') { origen = null; vista = 'estudiantes'; } recargar(); }
+function cerrarKid() { K = null; usarVersion(VERSION_ACTUAL); $('#kid').classList.add('oculto'); $('#app').classList.remove('oculto'); origen = null; vista = 'estudiantes'; recargar(); }
 function renderFin() {
   const { codigo, momento, resp, estado } = K, dur = Math.round((Date.now() - K.t0) / 1000);
   const auto = autoPuntajes(resp, estado), cerr = PUNTUABLES.filter(esCerrado), autoN = cerr.filter((it) => auto[it.codigo] != null), suma = autoN.reduce((s, it) => s + auto[it.codigo], 0);
   const om = PUNTUABLES.filter((it) => estado[it.codigo] === 'omitido' || (!estado[it.codigo] && !respondido(it, resp))).map((it) => it.num), fa = PUNTUABLES.filter((it) => estado[it.codigo] === 'faltante').map((it) => it.num);
   const resps = PUNTUABLES.length - om.length - fa.length;
-  $('#kProg').style.width = '100%'; $('#kCount').textContent = 'Fin'; $('#kNav').classList.add('oculto');
+  pintarProgreso(null); $('#kCount').textContent = 'Fin'; $('#kNav').classList.add('oculto');
   $('#kBody').innerHTML = `<div class="k-fin-grid"><div class="caja kid-fin"><p class="estrellas">⭐ 🌟 ⭐</p><h3>¡Muy bien, terminamos!</h3>
     <p style="color:var(--tinta-2);margin:0">Resumen para el aplicador: ${esc(codigo)} ${esc(nombreDe(codigo))}, ${esc(momento)}, ${fmtDur(dur)}.</p>
     <div class="res"><span>${resps} de ${PUNTUABLES.length} ítems respondidos</span>${om.length ? `<span class="om">Omitidos (0 puntos): ${om.join(', ')}</span>` : ''}${fa.length ? `<span class="falt">Sin oportunidad (dato faltante): ${fa.join(', ')}</span>` : ''}</div>
     <table><tr><td>Ítems cerrados calificados con la clave (${autoN.length} de ${cerr.length})</td><td>${suma} de ${autoN.length * 2}</td></tr><tr><td>Ítems de rúbrica pendientes de calificar en el módulo Calificar</td><td>${RUBRICA.filter((it) => estado[it.codigo] !== 'faltante' && estado[it.codigo] !== 'omitido' && respondido(it, resp)).length}</td></tr></table>
     <div class="campo"><label for="kObs">Observaciones e incidencias (opcional)</label><textarea id="kObs" rows="2" placeholder="Por ejemplo: se le volvió a leer la situación 3; pausa de 5 minutos; apoyo para escribir en los ítems 10 y 15"></textarea></div>
-    <div class="fila" style="margin-top:12px"><button class="btn grande" id="kSave">Guardar</button></div><div id="kMsg" style="margin-top:10px"></div></div></div>`;
+    <div class="fila" style="margin-top:12px"><button class="btn grande" id="kSave">Guardar y terminar</button></div><div id="kMsg" style="margin-top:10px"></div></div></div>`;
   $('#kSave').addEventListener('click', async () => {
     $('#kSave').disabled = true;
     const cuerpo = { row: { codigo, momento, aplicador: K.aplicador, duracion_seg: dur, fecha_inicio: K.fecha_inicio, respuestas: resp, estado, ...(K.momento === 'Postest' ? { orden: K.orden } : {}), incompleta: false, observaciones: $('#kObs').value.trim() } };
-    try { await api('registro', { method: 'PUT', body: cuerpo }); localStorage.removeItem('avance'); toast('Guardado'); cerrarKid(true); }
+    try { await api('registro', { method: 'PUT', body: cuerpo }); localStorage.removeItem('avance'); toast(`${momento} de ${codigo} ${nombreDe(codigo)} completo ✓`); cerrarKid(true); }
     catch (e) {
       if (e.status && e.status < 500) { $('#kMsg').innerHTML = `<div class="aviso mal">No se pudo guardar: ${esc(e.message)}.</div>`; $('#kSave').disabled = false; return; }
       // sin conexión (o falla del servidor): queda en este dispositivo y se envía cuando vuelva la conexión
@@ -544,7 +557,8 @@ setInterval(() => { if (leerCola().length) enviarCola(); }, 60000);
 
 /* ---------- calificar ---------- */
 let calVista = 'lista', calRol = localStorage.getItem('calRol') || '1', calSel = null, calFiltro = localStorage.getItem('calFiltro') || 'pendientes', calPiloto = true;
-const nombreCal = (rol) => sessionStorage.getItem('calNombre' + rol) || ''; // se recuerda solo mientras dure la sesión: no hay nombres por defecto
+// No se escriben nombres: cada calificación lleva solo su rol («Calificador 1» o «Calificador 2»), para evitar nombres duplicados o mal escritos.
+const nombreCal = (rol) => (rol === 'F' ? 'Acuerdo' : `Calificador ${rol}`);
 function irCalificar(codigo, momento, e) { calSel = { codigo, momento }; calRol = e === 'completa' || e === 'doble' ? 'F' : (cal(codigo, momento)['1']?.completa ? '2' : '1'); localStorage.setItem('calRol', calRol); calVista = 'protocolo'; $('#ficha').classList.add('oculto'); origen = 'estudiantes'; ir('calificar'); }
 const protocolos = () => D.pc.slice().sort((a, b) => (a.protocolo || '').localeCompare(b.protocolo || '')); // orden por código de protocolo: mezcla grupos y momentos
 const nRub = (r) => RUBRICA.filter((it) => !r.estado?.[it.codigo]).length; // ítems de rúbrica que requieren puntuación humana (los omitidos valen 0 por regla; los faltantes no se puntúan)
@@ -560,14 +574,12 @@ function barraCal() {
   const n = D.pc.length, porRol = (rol) => D.pc.filter((r) => cal(r.codigo, r.momento)[rol]?.completa).length, acordados = D.pc.filter((r) => estadoCalif(cal(r.codigo, r.momento)) === 'completa').length;
   $('#resumenC').textContent = n ? `${n} protocolo${n > 1 ? 's' : ''} · calificador 1: ${porRol('1')} · calificador 2: ${porRol('2')} · acordados: ${acordados}` : '';
   return `<div class="cal-barra"><div class="campo" style="flex:0 0 auto"><label>Quién califica</label><div class="seg" id="cRol">${[['1', 'Calificador 1'], ['2', 'Calificador 2'], ['F', 'Acuerdo']].map(([r, t]) => `<button data-m="${r}" class="${calRol === r ? 'activo' : ''}">${t}</button>`).join('')}</div></div>` +
-    (calRol !== 'F' ? `<div class="campo" style="max-width:260px"><label for="cNombre">Nombre del calificador ${calRol}</label><input id="cNombre" value="${esc(nombreCal(calRol))}" placeholder="Nombre"></div>` : '') +
     `<div class="campo" style="flex:0 0 auto"><label>Mostrar</label><div class="seg" id="cFiltro"><button data-m="pendientes" class="${calFiltro === 'pendientes' ? 'activo' : ''}">Pendientes</button><button data-m="todos" class="${calFiltro === 'todos' ? 'activo' : ''}">Todos</button></div></div></div>` +
     `<div class="cal-stats"><span class="chip" title="Protocolos con los dos calificadores completos"><b>${A.total.n ? D.pc.filter((r) => { const c = cal(r.codigo, r.momento); return c['1']?.completa && c['2']?.completa; }).length : 0}</b> con doble calificación</span><span class="chip" title="Porcentaje de ítems de rúbrica en los que los dos calificadores dieron el mismo puntaje"><b>${fmtPct(A.total.pct)}</b> acuerdo exacto</span><span class="chip" title="Kappa ponderado con pesos lineales sobre todos los ítems de rúbrica con doble calificación"><b>${fmtK(A.total.kappa)}</b> kappa ponderado (${A.total.n} pares)</span><label class="check" for="cPiloto" title="Incluir en las estadísticas de acuerdo los protocolos del grupo Piloto"><input type="checkbox" id="cPiloto" ${calPiloto ? 'checked' : ''}> incluir Piloto</label></div>`;
 }
 function activarBarraCal(onChange) {
   $('#cRol').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { calRol = b.dataset.m; localStorage.setItem('calRol', calRol); onChange(); }));
   $('#cFiltro').querySelectorAll('button').forEach((b) => b.addEventListener('click', () => { calFiltro = b.dataset.m; localStorage.setItem('calFiltro', calFiltro); onChange(); }));
-  $('#cNombre')?.addEventListener('input', () => sessionStorage.setItem('calNombre' + calRol, $('#cNombre').value.trim()));
   $('#cPiloto').addEventListener('change', () => { calPiloto = $('#cPiloto').checked; onChange(); });
 }
 function verListaCal() {
@@ -637,16 +649,15 @@ function verProtocolo() {
   };
   const ver = versionDe(r) !== VERSION_ACTUAL ? `<p class="aviso" style="margin:0 0 10px">Este protocolo se aplicó con la <b>${esc(nombreVersion(versionDe(r)))}</b>: las respuestas y las claves de los ítems cerrados son las de esa versión. La rúbrica de calificación es la misma para todos los grupos.</p>` : '';
   const pinta = () => { const h = hechos(r, { puntos }), n = nRub(r); $('#cAvance').innerHTML = `<span>${h} de ${n} ítems puntuados</span><div class="barra"><i style="width:${n ? 100 * h / n : 0}%"></i></div>`; };
-  $('#calCuerpo').innerHTML = `<div class="cal-prot"><div><h3>Protocolo ${esc(r.protocolo)}</h3><span class="sub">Calificador ${rol}${nombreCal(rol) ? ': ' + esc(nombreCal(rol)) : ''} · aplicado el ${esc(r.fecha)}${C ? ' · calificación guardada el ' + esc(C.fecha) : ''}</span></div><div class="avance" id="cAvance"></div><button class="lnk chico" id="cVolver">← Volver a la lista</button></div>` +
+  $('#calCuerpo').innerHTML = `<div class="cal-prot"><div><h3>Protocolo ${esc(r.protocolo)}</h3><span class="sub">Calificador ${rol} · aplicado el ${esc(r.fecha)}${C ? ' · calificación guardada el ' + esc(C.fecha) : ''}</span></div><div class="avance" id="cAvance"></div><button class="lnk chico" id="cVolver">← Volver a la lista</button></div>` +
     `<p class="guia">Lea la respuesta del estudiante y elija el nivel de la rúbrica (2, 1 o 0). El 0 es solo para la omisión («no sé», «porque sí») o la respuesta sin relación con la pregunta; cualquier otro intento recibe al menos 1. Los ítems cerrados ya están calificados con la clave. Puede guardar a medias y continuar después.</p>` + ver +
     PUNTUABLES.map(itemHtml).join('') +
-    `<div class="cal-pie"><div class="campo" style="max-width:240px"><label for="cNombre2">Nombre del calificador ${rol}</label><input id="cNombre2" value="${esc(nombreCal(rol))}" placeholder="Nombre"></div><div class="campo"><label for="cObs">Observaciones (opcional)</label><input id="cObs" value="${esc(C?.observaciones || '')}"></div><button class="btn grande" id="cGuardar">Guardar calificación</button><div class="msg" id="cMsg"></div></div>`;
+    `<div class="cal-pie"><div class="campo"><label for="cObs">Observaciones (opcional)</label><input id="cObs" value="${esc(C?.observaciones || '')}"></div><button class="btn grande" id="cGuardar">Guardar calificación</button><div class="msg" id="cMsg"></div></div>`;
   pinta(); window.scrollTo(0, 0);
   $('#cVolver').addEventListener('click', verListaCal);
-  $('#cNombre2').addEventListener('input', () => sessionStorage.setItem('calNombre' + rol, $('#cNombre2').value.trim()));
   $('#calCuerpo').querySelectorAll('[data-pt]').forEach((b) => b.addEventListener('click', () => { puntos[b.dataset.pt] = Number(b.dataset.v); b.parentElement.querySelectorAll('button').forEach((x) => x.classList.toggle('sel', x === b)); pinta(); }));
   $('#cGuardar').addEventListener('click', async () => {
-    const nombre = $('#cNombre2').value.trim(); if (!nombre) return ($('#cMsg').innerHTML = '<div class="aviso mal" style="margin:0">Escriba el nombre del calificador.</div>');
+    const nombre = nombreCal(rol);
     const pend = nRub(r) - hechos(r, { puntos });
     if (pend && !(await dialogo({ titulo: 'Calificación incompleta', texto: `Faltan ${pend} ítem(s) por puntuar. Se guarda como "en proceso" y puede continuar después.`, ok: 'Guardar así', cancelar: 'Seguir calificando' }))) return;
     $('#cGuardar').disabled = true;
